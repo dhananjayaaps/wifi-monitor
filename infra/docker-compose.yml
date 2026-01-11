@@ -1,0 +1,32 @@
+version: "3.8"
+services:
+  backend:
+    build: ./docker/backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_URL=postgresql://user:password@db:5432/wifi_monitor
+      - REDIS_URL=redis://cache:6379/0
+    depends_on:
+      - db
+      - cache
+  pi-agent:
+    build: ./docker/pi-agent
+    environment:
+      - BACKEND_URL=http://backend:8000/api/v1
+    depends_on:
+      - backend
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=wifi_monitor
+    volumes:
+      - db_data:/var/lib/postgresql/data
+  cache:
+    image: redis:7
+    ports:
+      - "6379:6379"
+volumes:
+  db_data:

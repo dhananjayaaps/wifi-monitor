@@ -1,0 +1,27 @@
+# Git ignore patterns
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.env
+.venv
+*.log
+*.db
+*.sqlite
+.DS_Store
+.vscode/
+.idea/
+node_modules/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/
+.packages
+build/

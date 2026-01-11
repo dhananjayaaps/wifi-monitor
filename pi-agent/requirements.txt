@@ -1,0 +1,7 @@
+scapy
+nmap
+python-dotenv
+redis
+requests
+apscheduler
+pyyaml
