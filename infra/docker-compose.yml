@@ -3,7 +3,7 @@ services:
   backend:
     build: ./docker/backend
     ports:
-      - "8000:8000"
+      - "5000:5000"
     environment:
       - DB_URL=postgresql://user:password@db:5432/wifi_monitor
     depends_on:
@@ -11,7 +11,7 @@ services:
   pi-agent:
     build: ./docker/pi-agent
     environment:
-      - BACKEND_URL=http://backend:8000/api/v1
+      - BACKEND_URL=http://backend:5000/api/v1
     depends_on:
       - backend
   db:

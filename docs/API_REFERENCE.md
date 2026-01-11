@@ -7,7 +7,7 @@ See `/docs/api/` for detailed endpoint documentation:
 - [Alerts](./alerts.md)
 - [Notifications](./notifications.md)
 
-Base URL: `http://your-server:8000/api/v1`
+Base URL: `http://your-server:5000/api/v1`
 
 All requests require Bearer token authentication:
 ```

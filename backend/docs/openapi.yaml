@@ -1,0 +1,387 @@
+openapi: 3.0.3
+info:
+  title: Wifi Monitor API
+  version: 1.0.0
+  description: OpenAPI specification for the Wifi-monitor backend (development).
+servers:
+  - url: http://localhost:5000
+    description: Local dev server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, email]
+    UserCreate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+    AuthRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        status:
+          type: string
+      required: [access_token, status]
+    UserEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+        status:
+          type: string
+      required: [data, status]
+    Device:
+      type: object
+      properties:
+        id:
+          type: integer
+        owner_id:
+          type: integer
+        mac_address:
+          type: string
+        ip_address:
+          type: string
+        hostname:
+          type: string
+        manufacturer:
+          type: string
+        device_type:
+          type: string
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, mac_address, owner_id]
+    DeviceCreate:
+      type: object
+      properties:
+        owner_id:
+          type: integer
+        mac_address:
+          type: string
+        ip_address:
+          type: string
+        hostname:
+          type: string
+        manufacturer:
+          type: string
+        device_type:
+          type: string
+      required: [mac_address]
+    DeviceStat:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        bytes_uploaded:
+          type: integer
+        bytes_downloaded:
+          type: integer
+        total_bytes:
+          type: integer
+      required: [id, device_id]
+    DeviceStatCreate:
+      type: object
+      properties:
+        device_id:
+          type: integer
+        bytes_uploaded:
+          type: integer
+        bytes_downloaded:
+          type: integer
+      required: [device_id]
+    Alert:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        device_id:
+          type: integer
+          nullable: true
+        alert_type:
+          type: string
+        threshold_value:
+          type: integer
+        is_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required: [id, user_id, alert_type, threshold_value]
+    AlertHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+        alert_id:
+          type: integer
+        device_id:
+          type: integer
+          nullable: true
+        triggered_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        value_at_trigger:
+          type: integer
+      required: [id, alert_id, value_at_trigger]
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        message:
+          type: string
+        notification_type:
+          type: string
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required: [id, user_id, message]
+paths:
+  /api/v1/system/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  uptime:
+                    type: string
+  /api/v1/auth/register:
+    post:
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: Created user (enveloped)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+  /api/v1/auth/login:
+    post:
+      summary: Login and receive JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '200':
+          description: Authentication response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /api/v1/devices:
+    get:
+      summary: List devices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+    post:
+      summary: Register a device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: Device created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+  /api/v1/devices/{device_id}:
+    get:
+      summary: Get device by id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+  /api/v1/usage:
+    post:
+      summary: Ingest device stat (usage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceStatCreate'
+      responses:
+        '201':
+          description: Created device stat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStat'
+    get:
+      summary: List usage records
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of usage records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceStat'
+  /api/v1/alerts:
+    get:
+      summary: List alerts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+    post:
+      summary: Create an alert
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                device_id:
+                  type: integer
+                alert_type:
+                  type: string
+                threshold_value:
+                  type: integer
+                is_enabled:
+                  type: boolean
+              required: [user_id, alert_type, threshold_value]
+      responses:
+        '201':
+          description: Created alert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+  /api/v1/alerts/{alert_id}/history:
+    get:
+      summary: List history entries for an alert
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertHistory'

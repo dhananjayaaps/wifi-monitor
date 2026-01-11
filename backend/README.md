@@ -22,7 +22,7 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 export FLASK_APP=app.wsgi:app
-flask run --host=0.0.0.0 --port=8000
+flask run --host=0.0.0.0 --port=5000
 ```
 
 Environment variables (see `config/.env.example` at repo root):

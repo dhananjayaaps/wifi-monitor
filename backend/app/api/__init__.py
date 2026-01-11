@@ -5,6 +5,7 @@ from .routes.devices import devices_bp
 from .routes.usage import usage_bp
 from .routes.alerts import alerts_bp
 from .routes.system import system_bp
+from .docs import docs_bp
 
 
 def init_api(app, prefix: str) -> None:
@@ -17,3 +18,6 @@ def init_api(app, prefix: str) -> None:
 	api_bp.register_blueprint(system_bp, url_prefix="/system")
 
 	app.register_blueprint(api_bp)
+
+	# Register docs at /docs (serves swagger.html and openapi.yaml)
+	app.register_blueprint(docs_bp, url_prefix="/docs")
