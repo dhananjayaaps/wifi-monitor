@@ -109,7 +109,7 @@ Contains the Flask REST API with modular structure:
 Raspberry Pi monitoring service:
 - **scanner**: Network device detection (nmap/ARP)
 - **monitor**: Packet capture & traffic analysis (Scapy)
-- **cache**: Local Redis/SQLite buffering
+- **cache**: Local buffering (e.g., SQLite/file-based)
 - **scheduler**: Periodic task execution
 
 ### Mobile (`/mobile`)

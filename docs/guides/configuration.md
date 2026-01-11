@@ -3,7 +3,6 @@
 ## Backend Configuration
 Edit `backend/app/config/settings.py` or use environment variables:
 - `DB_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string
 - `SECRET_KEY`: JWT signing key
 
 ## Pi Agent Configuration

@@ -8,7 +8,7 @@ Structure:
   - models.py (ORM models)
   - services/ (business logic)
   - schemas/ (request/response validation via Pydantic)
-  - tasks/ (Celery tasks placeholder)
+  - tasks/ (Celery tasks placeholder, in-memory broker)
   - config/ (environment-driven settings)
   - wsgi.py (Gunicorn entrypoint)
 - migrations/ (database migrations)
@@ -29,7 +29,6 @@ Environment variables (see `config/.env.example` at repo root):
 - `DATABASE_URL` (default: sqlite:///../wifi_monitor.db)
 - `SECRET_KEY`
 - `JWT_SECRET_KEY`
-- `REDIS_URL`
 - `CORS_ORIGINS`
 
 API base URL: `/api/v1`

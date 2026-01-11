@@ -42,7 +42,7 @@ See [Installation Guide](docs/guides/installation.md)
 
 ## Tech Stack
 - **Hardware**: Raspberry Pi 3/4
-- **Backend**: Flask + PostgreSQL + Redis
+- **Backend**: Flask + PostgreSQL
 - **Mobile**: Flutter
 - **Monitoring**: Prometheus + Grafana
 - **Notifications**: Firebase Cloud Messaging

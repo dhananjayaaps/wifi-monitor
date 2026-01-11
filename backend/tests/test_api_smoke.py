@@ -1,6 +1,6 @@
 """Basic smoke tests for the Flask app."""
 import pytest
-from app import create_app
+from backend.app.app import create_app
 
 
 @pytest.fixture

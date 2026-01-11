@@ -9,7 +9,6 @@ class Settings(BaseSettings):
 	secret_key: str = "change_me"
 	jwt_secret_key: str = "change_me_jwt"
 	database_url: str = "sqlite:///../wifi_monitor.db"
-	redis_url: str = "redis://localhost:6379/0"
 	api_prefix: str = "/api/v1"
 	debug: bool = False
 	cors_origins: str = "*"

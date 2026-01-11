@@ -1,12 +1,15 @@
-"""Celery tasks placeholder for future async jobs."""
+"""Celery tasks placeholder for future async jobs.
+
+Uses in-memory broker/backend to avoid external Redis dependency. Replace with a
+real broker (e.g., RabbitMQ/SQS) when scaling background tasks.
+"""
 from celery import Celery
-import os
 
 
 celery_app = Celery(
 	"wifi_monitor_tasks",
-	broker=os.getenv("CELERY_BROKER_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0")),
-	backend=os.getenv("CELERY_RESULT_BACKEND", os.getenv("REDIS_URL", "redis://localhost:6379/0")),
+	broker="memory://",
+	backend="cache+memory://",
 )
 
 
