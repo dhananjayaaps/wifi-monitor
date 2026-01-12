@@ -5,6 +5,7 @@ from .routes.devices import devices_bp
 from .routes.usage import usage_bp
 from .routes.alerts import alerts_bp
 from .routes.system import system_bp
+from .routes.agents import agents_bp
 from .docs import docs_bp
 
 
@@ -16,6 +17,7 @@ def init_api(app, prefix: str) -> None:
 	api_bp.register_blueprint(usage_bp, url_prefix="/usage")
 	api_bp.register_blueprint(alerts_bp, url_prefix="/alerts")
 	api_bp.register_blueprint(system_bp, url_prefix="/system")
+	api_bp.register_blueprint(agents_bp, url_prefix="/agents")
 
 	app.register_blueprint(api_bp)
 

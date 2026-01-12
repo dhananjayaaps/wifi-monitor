@@ -3,12 +3,40 @@ from datetime import datetime
 from typing import Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func
+import secrets
 from .extensions import db
 
 
 class TimestampMixin:
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Agent(TimestampMixin, db.Model):
+    __tablename__ = "agents"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    api_key = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    last_sync = db.Column(db.DateTime, nullable=True)
+
+    owner = db.relationship("User", backref="agents", lazy=True)
+
+    @staticmethod
+    def generate_api_key() -> str:
+        return secrets.token_urlsafe(32)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "owner_id": self.owner_id,
+            "is_active": self.is_active,
+            "last_sync": self.last_sync.isoformat() if self.last_sync else None,
+            "created_at": self.created_at.isoformat(),
+        }
 
 
 class User(TimestampMixin, db.Model):

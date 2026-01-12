@@ -1,7 +1,7 @@
-scapy
-nmap
-python-dotenv
-redis
-requests
-apscheduler
-pyyaml
+# Core dependencies for Pi Agent
+requests==2.31.0
+PyYAML==6.0.1
+
+# Optional: For real network scanning (requires root/admin)
+# scapy==2.5.0
+# python-nmap==0.7.1
