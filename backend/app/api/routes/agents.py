@@ -30,6 +30,20 @@ def agent_required(f):
     return decorated
 
 
+@agents_bp.route("", methods=["GET"])
+@jwt_required()
+def list_agents():
+    """List all agents for the authenticated user."""
+    user_id = int(get_jwt_identity())
+    
+    agents = Agent.query.filter_by(owner_id=user_id).all()
+    
+    return jsonify({
+        "status": "success",
+        "data": [agent.to_dict() for agent in agents]
+    }), 200
+
+
 @agents_bp.route("/register", methods=["POST"])
 @jwt_required()
 def register_agent():

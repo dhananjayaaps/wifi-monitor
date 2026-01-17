@@ -196,6 +196,44 @@ components:
           type: string
           format: date-time
       required: [id, user_id, message]
+    Agent:
+      type: object
+      properties:
+        id:
+          type: integer
+        owner_id:
+          type: integer
+        name:
+          type: string
+        api_key:
+          type: string
+        is_active:
+          type: boolean
+        last_sync:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, owner_id, name, is_active]
+    AgentCreate:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+    AgentResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        data:
+          $ref: '#/components/schemas/Agent'
+      required: [status, data]
 paths:
   /api/v1/system/health:
     get:
@@ -385,3 +423,91 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AlertHistory'
+  /api/v1/agents:
+    get:
+      summary: List all agents for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+  /api/v1/agents/register:
+    post:
+      summary: Register a new Pi agent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      responses:
+        '201':
+          description: Agent registered successfully (API key returned only once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+  /api/v1/agents/devices:
+    post:
+      summary: Sync device list from agent (bulk upsert)
+      description: Used by Pi agents to sync discovered devices. Requires agent API key authentication.
+      parameters:
+        - name: X-Agent-API-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Agent API key for authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                devices:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      mac_address:
+                        type: string
+                      ip_address:
+                        type: string
+                      hostname:
+                        type: string
+                      manufacturer:
+                        type: string
+                      device_type:
+                        type: string
+                    required: [mac_address]
+              required: [devices]
+      responses:
+        '200':
+          description: Devices synced successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  synced_count:
+                    type: integer
+                  devices:
+                    type: array
+                    items:
+                      type: string
