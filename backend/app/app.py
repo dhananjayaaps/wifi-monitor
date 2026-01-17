@@ -45,6 +45,18 @@ def create_app() -> Flask:
 	db.init_app(app)
 	jwt.init_app(app)
 
+	# Handle OPTIONS requests for CORS preflight
+	@app.before_request
+	def handle_preflight():
+		from flask import request, make_response
+		if request.method == 'OPTIONS':
+			response = make_response()
+			response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+			response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
+			response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH')
+			response.headers.add('Access-Control-Max-Age', '3600')
+			return response, 200
+
 	register_error_handlers(app)
 	init_api(app, prefix=settings.api_prefix)
 

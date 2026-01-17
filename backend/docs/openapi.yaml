@@ -331,6 +331,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Device'
+  /api/v1/devices/{device_id}/stats:
+    get:
+      summary: Get usage statistics for a device
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: hours
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 24
+          description: Number of hours to retrieve stats for
+      responses:
+        '200':
+          description: Device statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeviceStat'
   /api/v1/usage:
     post:
       summary: Ingest device stat (usage)
