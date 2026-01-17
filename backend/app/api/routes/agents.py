@@ -35,7 +35,7 @@ def agent_required(f):
 def register_agent():
     """Register a new Pi agent (requires user auth)."""
     data = request.get_json()
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     
     name = data.get("name", "Pi Agent")
     

@@ -26,7 +26,7 @@ def authenticate(email: str, password: str) -> Optional[str]:
     user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
         raise AuthError("Invalid credentials")
-    token = create_access_token(identity=user.id)
+    token = create_access_token(identity=str(user.id))
     return token
 
 

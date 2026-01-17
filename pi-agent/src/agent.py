@@ -11,8 +11,7 @@ class Agent:
     def __init__(self, config_path: str = "config.yaml"):
         self.config = Config(config_path)
         self.client = BackendClient(
-            base_url=self.config.api_base_url,
-            api_key=self.config.agent_api_key
+            base_url=self.config.api_base_url
         )
         self.scanner = NetworkScanner(simulation_mode=self.config.simulation_mode)
         self.collector = StatsCollector(
@@ -32,9 +31,9 @@ class Agent:
         print(f"Scan interval: {self.config.scan_interval}s")
         print(f"Stats interval: {self.config.stats_interval}s")
         
-        if not self.config.agent_api_key:
-            print("\n⚠️  ERROR: agent_api_key not configured!")
-            print("Please register agent via backend API and update config.yaml")
+        if not self.config.auth_email or not self.config.auth_password:
+            print("\n⚠️  ERROR: Authentication credentials not configured!")
+            print("Please set auth.email and auth.password in config.yaml")
             return
         
         # Test connectivity
@@ -44,11 +43,20 @@ class Agent:
             return
         print("✓ Connected to backend")
         
-        # Test authentication
-        if not self.client.ping():
-            print("❌ Agent authentication failed (invalid API key)")
+        # Authenticate and get API key
+        print("\nAuthenticating...")
+        api_key = self.client.login(self.config.auth_email, self.config.auth_password)
+        if not api_key:
+            print("❌ Authentication failed (invalid credentials)")
             return
-        print("✓ Agent authenticated")
+        print("✓ Authenticated successfully")
+        print(f"✓ Obtained API key: {api_key[:20]}...")
+        
+        # Test agent authentication
+        if not self.client.ping():
+            print("❌ Agent ping failed")
+            return
+        print("✓ Agent ready")
         
         print("\nAgent running. Press Ctrl+C to stop.\n")
         

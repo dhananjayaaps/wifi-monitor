@@ -3,9 +3,11 @@
 # Backend API endpoint
 api_base_url: "http://localhost:5000/api/v1"
 
-# Agent API key (obtained from POST /api/v1/agents/register)
-# Leave empty for first run, then update after registration
-agent_api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc2ODE4MTQ1NSwianRpIjoiOTcyZDQxYWMtYzFjZi00OGQ1LTgzMTYtNTFjNWFlZTJlNzQzIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6MSwibmJmIjoxNzY4MTgxNDU1LCJjc3JmIjoiZGY1OWFiNDQtOTliNC00MDc0LWJiZjctNDk1Yjk0NjVjMjQyIiwiZXhwIjoxNzY4MTgyMzU1fQ.oY0CBxnENr72tRaTBujpLAfpJX1Qf_-A0kwbIti3e58"
+# Authentication credentials
+# The agent will login with these credentials to get an API key
+auth:
+  email: "admin@wifi.com"
+  password: "admin123"
 
 # Simulation mode for POC testing without real hardware
 simulation_mode: true

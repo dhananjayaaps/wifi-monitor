@@ -4,14 +4,54 @@ from typing import List, Dict, Any, Optional
 
 
 class BackendClient:
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str = ""):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.session = requests.Session()
         self.session.headers.update({
-            "X-Agent-API-Key": api_key,
             "Content-Type": "application/json"
         })
+        if api_key:
+            self.session.headers.update({"X-Agent-API-Key": api_key})
+    
+    def login(self, email: str, password: str) -> Optional[str]:
+        """Login to get JWT token, then register agent to get API key."""
+        try:
+            # Step 1: Login to get JWT token
+            response = requests.post(
+                f"{self.base_url}/auth/login",
+                json={"email": email, "password": password},
+                timeout=5
+            )
+            if response.status_code != 200:
+                print(f"Login failed: {response.status_code} - {response.text}")
+                return None
+            
+            jwt_token = response.json().get("access_token")
+            if not jwt_token:
+                print("No access token in login response")
+                return None
+            
+            # Step 2: Register agent to get API key
+            response = requests.post(
+                f"{self.base_url}/agents/register",
+                json={"name": "pi-agent"},
+                headers={"Authorization": f"Bearer {jwt_token}"},
+                timeout=5
+            )
+            if response.status_code != 201:
+                print(f"Agent registration failed: {response.status_code} - {response.text}")
+                return None
+            
+            api_key = response.json().get("data", {}).get("api_key")
+            if api_key:
+                self.api_key = api_key
+                self.session.headers.update({"X-Agent-API-Key": api_key})
+            
+            return api_key
+        except Exception as e:
+            print(f"Login error: {e}")
+            return None
     
     def health_check(self) -> bool:
         """Test backend connectivity (no auth required)."""

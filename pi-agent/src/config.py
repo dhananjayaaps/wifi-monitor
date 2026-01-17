@@ -34,8 +34,12 @@ class Config:
         return self.get("api_base_url", "http://localhost:5000/api/v1")
     
     @property
-    def agent_api_key(self) -> str:
-        return self.get("agent_api_key", "")
+    def auth_email(self) -> str:
+        return self.get("auth.email", "")
+    
+    @property
+    def auth_password(self) -> str:
+        return self.get("auth.password", "")
     
     @property
     def simulation_mode(self) -> bool:
