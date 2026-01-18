@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { devicesAPI, alertsAPI, agentsAPI } from '@/lib/api';
-import { Wifi, AlertTriangle, Zap, Activity } from 'lucide-react';
+import { Wifi, AlertTriangle, Zap, Activity, Smartphone, Laptop, Tablet, Tv, Router, Cpu } from 'lucide-react';
 
 interface Device {
   id: number;
@@ -10,6 +10,8 @@ interface Device {
   hostname: string;
   ip_address: string;
   is_active: boolean;
+  manufacturer?: string;
+  device_type?: string;
 }
 
 interface Alert {
@@ -17,6 +19,24 @@ interface Alert {
   title: string;
   threshold: number;
   status: string;
+}
+
+const deviceTypeIconMap: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
+  smartphone: Smartphone,
+  laptop: Laptop,
+  tablet: Tablet,
+  smart_tv: Tv,
+  router: Router,
+  iot_device: Cpu,
+};
+
+function DeviceIcon({ type, active }: { type?: string; active?: boolean }) {
+  if (!type) return <Cpu className={`${active ? 'text-slate-600' : 'text-slate-400'}`} size={20} />;
+  
+  const Icon = deviceTypeIconMap[type];
+  if (!Icon) return <Cpu className={`${active ? 'text-slate-600' : 'text-slate-400'}`} size={20} />;
+  
+  return <Icon className={`${active ? 'text-blue-600' : 'text-slate-400'}`} size={20} />;
 }
 
 export default function DashboardPage() {
@@ -90,6 +110,9 @@ export default function DashboardPage() {
                   <thead>
                     <tr className="border-b border-slate-200">
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">
+                        Device
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">
                         Hostname
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">
@@ -106,6 +129,9 @@ export default function DashboardPage() {
                   <tbody>
                     {devices.map((device) => (
                       <tr key={device.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4">
+                          <DeviceIcon type={device.device_type} active={device.is_active} />
+                        </td>
                         <td className="py-3 px-4 text-slate-900">{device.hostname || 'N/A'}</td>
                         <td className="py-3 px-4 text-slate-600">{device.ip_address}</td>
                         <td className="py-3 px-4 text-slate-600 font-mono text-sm">

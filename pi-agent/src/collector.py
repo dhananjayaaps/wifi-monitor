@@ -1,13 +1,14 @@
 """Usage stats collector - monitors network traffic per device."""
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 class StatsCollector:
-    def __init__(self, simulation_mode: bool = False, min_bytes: int = 1024, max_bytes: int = 104857600):
+    def __init__(self, simulation_mode: bool = False, min_bytes: int = 1024, max_bytes: int = 104857600, alert_probability: float = 0.3):
         self.simulation_mode = simulation_mode
         self.min_bytes = min_bytes
         self.max_bytes = max_bytes
+        self.alert_probability = alert_probability  # Probability of simulating a high-usage alert
     
     def collect(self, devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Collect usage stats for devices. Returns list of stat dicts."""
@@ -17,11 +18,19 @@ class StatsCollector:
             return self._real_collect(devices)
     
     def _simulate_stats(self, devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Generate fake stats for POC testing."""
+        """Generate fake stats for POC testing, with occasional high-usage spikes."""
         stats = []
         for device in devices:
-            uploaded = random.randint(self.min_bytes, self.max_bytes)
-            downloaded = random.randint(self.min_bytes, self.max_bytes)
+            # Randomly simulate high-usage alerts (~30% of the time)
+            if random.random() < self.alert_probability:
+                # Simulate high usage that would trigger alerts
+                # Most systems have 100MB+ threshold, so we exceed that frequently
+                uploaded = random.randint(int(self.max_bytes * 0.5), self.max_bytes)
+                downloaded = random.randint(int(self.max_bytes * 0.5), self.max_bytes)
+            else:
+                # Normal usage
+                uploaded = random.randint(self.min_bytes, int(self.max_bytes * 0.3))
+                downloaded = random.randint(self.min_bytes, int(self.max_bytes * 0.3))
             
             stats.append({
                 "mac_address": device["mac_address"],

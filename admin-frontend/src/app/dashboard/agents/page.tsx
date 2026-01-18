@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Navbar } from '@/components/Navbar';
 import { agentsAPI } from '@/lib/api';
 import { Plus, Server } from 'lucide-react';
 
@@ -47,20 +46,17 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-900">Agents</h1>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
-          >
-            <Plus size={20} />
-            Register Agent
-          </button>
-        </div>
+    <div className="px-8 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-4xl font-bold text-slate-900">Agents</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+        >
+          <Plus size={20} />
+          Register Agent
+        </button>
+      </div>
 
         {showForm && (
           <div className="bg-white rounded-lg shadow p-6 mb-8">
@@ -96,50 +92,49 @@ export default function AgentsPage() {
           </div>
         )}
 
-        {loading ? (
-          <p className="text-slate-600">Loading...</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {agents.length > 0 ? (
-              agents.map((agent) => (
-                <div key={agent.id} className="bg-white rounded-lg shadow p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <Server className="text-blue-600" size={24} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-900">{agent.name}</h3>
-                      <span
-                        className={`text-xs font-medium ${
-                          agent.is_active ? 'text-green-600' : 'text-slate-400'
-                        }`}
-                      >
-                        {agent.is_active ? '● Active' : '● Inactive'}
-                      </span>
-                    </div>
+      {loading ? (
+        <p className="text-slate-600">Loading...</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {agents.length > 0 ? (
+            agents.map((agent) => (
+              <div key={agent.id} className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-slate-100 rounded-lg">
+                    <Server className="text-blue-600" size={24} />
                   </div>
-                  <div className="space-y-2 text-sm text-slate-600">
-                    <p>
-                      <span className="font-medium">Registered:</span>{' '}
-                      {new Date(agent.created_at).toLocaleDateString()}
-                    </p>
-                    {agent.last_sync && (
-                      <p>
-                        <span className="font-medium">Last Sync:</span>{' '}
-                        {new Date(agent.last_sync).toLocaleString()}
-                      </p>
-                    )}
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{agent.name}</h3>
+                    <span
+                      className={`text-xs font-medium ${
+                        agent.is_active ? 'text-green-600' : 'text-slate-400'
+                      }`}
+                    >
+                      {agent.is_active ? '● Active' : '● Inactive'}
+                    </span>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="col-span-full bg-white rounded-lg shadow p-12 text-center">
-                <p className="text-slate-600 text-lg">No agents registered yet</p>
+                <div className="space-y-2 text-sm text-slate-600">
+                  <p>
+                    <span className="font-medium">Registered:</span>{' '}
+                    {new Date(agent.created_at).toLocaleDateString()}
+                  </p>
+                  {agent.last_sync && (
+                    <p>
+                      <span className="font-medium">Last Sync:</span>{' '}
+                      {new Date(agent.last_sync).toLocaleString()}
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            ))
+          ) : (
+            <div className="col-span-full bg-white rounded-lg shadow p-12 text-center">
+              <p className="text-slate-600 text-lg">No agents registered yet</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

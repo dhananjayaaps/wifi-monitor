@@ -70,6 +70,31 @@ def delete_device(device_id: int):
     return jsonify({"status": "success"}), 204
 
 
+@devices_bp.route("/<int:device_id>/cap", methods=["PUT"])
+@jwt_required()
+def set_device_cap(device_id: int):
+    """Set or clear a device data cap (bytes). Send JSON {"data_cap": null} to clear."""
+    user_id = get_jwt_identity()
+    device = device_service.get_device(owner_id=user_id, device_id=device_id)
+    if not device:
+        return jsonify({"status": "error", "message": "Device not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    data_cap = payload.get("data_cap", None)
+    if data_cap is not None:
+        try:
+            data_cap = int(data_cap)
+            if data_cap < 0:
+                raise ValueError()
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "Invalid data_cap value"}), 400
+
+    device.data_cap = data_cap
+    db.session.commit()
+
+    return jsonify({"status": "success", "data": _serialize(device)}), 200
+
+
 @devices_bp.route("/<int:device_id>/stats", methods=["GET"])
 @jwt_required()
 def get_device_stats(device_id: int):

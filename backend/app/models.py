@@ -73,6 +73,7 @@ class Device(TimestampMixin, db.Model):
     first_seen = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
+    data_cap = db.Column(db.BigInteger, nullable=True)  # Data cap in bytes
 
     stats = db.relationship("DeviceStat", backref="device", lazy=True, cascade="all, delete-orphan")
 
@@ -88,6 +89,7 @@ class Device(TimestampMixin, db.Model):
             "first_seen": self.first_seen.isoformat() if self.first_seen else None,
             "last_seen": self.last_seen.isoformat() if self.last_seen else None,
             "is_active": self.is_active,
+            "data_cap": self.data_cap,
         }
 
 

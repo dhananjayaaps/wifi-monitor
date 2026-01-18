@@ -30,6 +30,7 @@ class DeviceResponse(BaseModel):
     first_seen: Optional[str]
     last_seen: Optional[str]
     is_active: bool
+    data_cap: Optional[int]
 
     class Config:
-        orm_mode = True
+        from_attributes = True

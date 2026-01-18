@@ -5,6 +5,7 @@ from functools import wraps
 from datetime import datetime
 from ...extensions import db
 from ...models import Agent, Device, DeviceStat
+from ...services import alert_service
 
 agents_bp = Blueprint("agents", __name__)
 
@@ -138,14 +139,21 @@ def ingest_stats(agent):
         if not device:
             continue  # Skip unknown devices
         
+        bytes_up = stat.get("bytes_uploaded", 0)
+        bytes_down = stat.get("bytes_downloaded", 0)
+        total_bytes = bytes_up + bytes_down
+        
         device_stat = DeviceStat(
             device_id=device.id,
             timestamp=datetime.utcnow(),
-            bytes_uploaded=stat.get("bytes_uploaded", 0),
-            bytes_downloaded=stat.get("bytes_downloaded", 0)
+            bytes_uploaded=bytes_up,
+            bytes_downloaded=bytes_down
         )
         db.session.add(device_stat)
         ingested.append(mac)
+        
+        # Evaluate alerts for this device
+        alert_service.evaluate_usage_alerts(agent.owner_id, device.id, total_bytes)
     
     db.session.commit()
     

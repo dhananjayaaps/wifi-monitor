@@ -1,100 +1,90 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Navbar } from '@/components/Navbar';
-import { alertsAPI } from '@/lib/api';
-import { AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { alertsAPI, devicesAPI } from '@/lib/api';
+import { AlertTriangle } from 'lucide-react';
 
-interface Alert {
+interface AlertHistoryItem {
   id: number;
-  title: string;
-  description?: string;
-  threshold: number;
-  status: string;
-  created_at: string;
+  alert_id: number;
+  device_id: number | null;
+  value_at_trigger: number;
+  triggered_at: string;
+  resolved_at?: string | null;
+}
+
+interface DeviceSummary {
+  id: number;
+  hostname?: string;
+  mac_address: string;
 }
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [history, setHistory] = useState<AlertHistoryItem[]>([]);
+  const [devices, setDevices] = useState<DeviceSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadAlerts = async () => {
+    const loadHistory = async () => {
       try {
-        const response = await alertsAPI.list();
-        setAlerts(response.data.data || []);
+        const [histResp, devResp] = await Promise.all([
+          alertsAPI.history(24),
+          devicesAPI.list(),
+        ]);
+        setHistory(histResp.data.data || []);
+        setDevices(devResp.data.data || []);
       } catch (error) {
-        console.error('Failed to load alerts:', error);
+        console.error('Failed to load alert history:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadAlerts();
+    loadHistory();
   }, []);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <AlertTriangle className="text-red-600" size={20} />;
-      case 'resolved':
-        return <CheckCircle className="text-green-600" size={20} />;
-      default:
-        return <Clock className="text-blue-600" size={20} />;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const badgeClass =
-      status === 'active'
-        ? 'bg-red-100 text-red-800'
-        : status === 'resolved'
-          ? 'bg-green-100 text-green-800'
-          : 'bg-blue-100 text-blue-800';
-
-    return <span className={`px-3 py-1 rounded-full text-sm font-medium ${badgeClass}`}>{status}</span>;
+  const deviceName = (device_id: number | null) => {
+    if (!device_id) return 'Unknown device';
+    const device = devices.find((d) => d.id === device_id);
+    if (!device) return `Device ${device_id}`;
+    return device.hostname || device.mac_address;
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-slate-900 mb-8">Alerts</h1>
+    <div className="px-8 py-8">
+      <h1 className="text-4xl font-bold text-slate-900 mb-8">Alerts</h1>
 
         {loading ? (
           <p className="text-slate-600">Loading...</p>
         ) : (
           <div className="space-y-4">
-            {alerts.length > 0 ? (
-              alerts.map((alert) => (
-                <div key={alert.id} className="bg-white rounded-lg shadow p-6 border-l-4 border-slate-300">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="mt-1">{getStatusIcon(alert.status)}</div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-slate-900">{alert.title}</h3>
-                        {alert.description && (
-                          <p className="text-slate-600 mt-1">{alert.description}</p>
-                        )}
-                        <div className="flex items-center gap-4 mt-3 text-sm text-slate-600">
-                          <span>Threshold: {alert.threshold} MB/s</span>
-                          <span>{new Date(alert.created_at).toLocaleString()}</span>
-                        </div>
+            {history.length > 0 ? (
+              history.map((item) => (
+                <div key={item.id} className="bg-white rounded-lg shadow p-6 border-l-4 border-red-400">
+                  <div className="flex items-start gap-4">
+                    <AlertTriangle className="text-red-600 mt-1" size={20} />
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-slate-900">Data usage alert</h3>
+                      <p className="text-slate-600 mt-1">
+                        Device: {deviceName(item.device_id)}
+                      </p>
+                      <div className="flex items-center gap-4 mt-3 text-sm text-slate-600">
+                        <span>
+                          Value at trigger: {(item.value_at_trigger / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                        <span>{new Date(item.triggered_at).toLocaleString()}</span>
                       </div>
                     </div>
-                    <div>{getStatusBadge(alert.status)}</div>
                   </div>
                 </div>
               ))
             ) : (
               <div className="bg-white rounded-lg shadow p-12 text-center">
-                <p className="text-slate-600 text-lg">No alerts yet</p>
+                <p className="text-slate-600 text-lg">No alerts in the last 24 hours</p>
               </div>
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }

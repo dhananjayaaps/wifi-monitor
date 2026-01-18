@@ -60,3 +60,15 @@ def update_alert(alert_id: int):
 
     alert = alert_service.update_alert(alert, **data.dict())
     return jsonify({"status": "success", "data": _serialize(alert)})
+
+
+@alerts_bp.route("/history", methods=["GET"])
+@jwt_required()
+def recent_alert_history():
+    """Return alert history entries for the authenticated user's alerts in the last 24 hours.
+    Optional `hours` query param may be provided to change the window.
+    """
+    user_id = get_jwt_identity()
+    hours = request.args.get("hours", 24, type=int)
+    histories = alert_service.list_recent_history(user_id=user_id, hours=hours)
+    return jsonify({"status": "success", "data": [h.to_dict() for h in histories]})

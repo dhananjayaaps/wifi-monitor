@@ -43,6 +43,8 @@ export const devicesAPI = {
   get: (id: number) => apiClient.get(`/devices/${id}`),
   getStats: (id: number, hours: number = 24) =>
     apiClient.get(`/devices/${id}/stats?hours=${hours}`),
+  setCap: (id: number, data_cap: number | null) =>
+    apiClient.put(`/devices/${id}/cap`, { data_cap }),
 };
 
 export const agentsAPI = {
@@ -55,4 +57,5 @@ export const alertsAPI = {
   get: (id: number) => apiClient.get(`/alerts/${id}`),
   create: (data: any) => apiClient.post('/alerts', data),
   update: (id: number, data: any) => apiClient.put(`/alerts/${id}`, data),
+  history: (hours: number = 24) => apiClient.get(`/alerts/history?hours=${hours}`),
 };
