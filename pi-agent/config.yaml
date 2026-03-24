@@ -3,6 +3,17 @@
 # Backend API endpoint
 api_base_url: "http://localhost:5000/api/v1"
 
+# Network interface to monitor
+# - For hotspot/AP mode: Use wlan0 (the WiFi interface broadcasting the hotspot)
+# - For regular monitoring: Use the interface you want to monitor
+interface: "wlan0"
+
+# Hotspot mode configuration
+# When running as WiFi hotspot (Access Point), set this to true
+# This optimizes scanning and monitoring for AP mode
+hotspot_mode: true
+internet_interface: "eth0"  # Interface providing internet (eth0 or usb0 for dongle)
+
 # Authentication credentials
 # The agent will login with these credentials to get an API key
 auth:
@@ -10,13 +21,22 @@ auth:
   password: "admin123"
 
 # Simulation mode for POC testing without real hardware
+# Set to false for production on Raspberry Pi
 simulation_mode: true
 
-# Scan interval in seconds
+# Scan interval in seconds (how often to scan for new devices)
 scan_interval: 30
 
-# Stats collection interval in seconds
+# Stats collection interval in seconds (how often to collect usage stats)
 stats_interval: 60
+
+# Logging configuration
+log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_dir: "logs"
+
+# Retry configuration for network operations
+retry_attempts: 3
+retry_delay: 5  # seconds
 
 # Simulation settings (only used when simulation_mode = true)
 simulation:

@@ -64,3 +64,31 @@ class Config:
     @property
     def simulation_max_bytes(self) -> int:
         return self.get("simulation.max_bytes", 104857600)
+    
+    @property
+    def interface(self) -> str:
+        return self.get("interface", "wlan0")
+    
+    @property
+    def log_level(self) -> str:
+        return self.get("log_level", "INFO")
+    
+    @property
+    def log_dir(self) -> str:
+        return self.get("log_dir", "logs")
+    
+    @property
+    def retry_attempts(self) -> int:
+        return self.get("retry_attempts", 3)
+    
+    @property
+    def retry_delay(self) -> int:
+        return self.get("retry_delay", 5)
+    
+    @property
+    def hotspot_mode(self) -> bool:
+        return self.get("hotspot_mode", False)
+    
+    @property
+    def internet_interface(self) -> str:
+        return self.get("internet_interface", "eth0")

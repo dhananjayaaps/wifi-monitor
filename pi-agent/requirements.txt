@@ -2,6 +2,8 @@
 requests==2.31.0
 PyYAML==6.0.1
 
-# Optional: For real network scanning (requires root/admin)
+# For real network scanning (production use)
+# Uncomment if you want to use scapy instead of arp-scan/nmap
+# Note: scapy requires additional system dependencies
 # scapy==2.5.0
 # python-nmap==0.7.1

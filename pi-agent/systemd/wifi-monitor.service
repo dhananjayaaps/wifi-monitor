@@ -1,13 +1,39 @@
 [Unit]
-Description=WiFi Monitor Pi Agent
-After=network.target
+Description=WiFi Monitor Pi Agent - Network Monitoring Service
+Documentation=https://github.com/your-repo/wifi-monitor
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/wifi-monitor/pi-agent
-ExecStart=/usr/bin/python3 /opt/wifi-monitor/pi-agent/src/main.py
+User=wifi-monitor
+Group=wifi-monitor
+WorkingDirectory=/opt/wifi-monitor
+Environment="PATH=/opt/wifi-monitor/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/opt/wifi-monitor/venv/bin/python3 /opt/wifi-monitor/run.py
+
+# Restart policy
 Restart=always
-RestartSec=5
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wifi-monitor
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wifi-monitor/logs
+ReadOnlyPaths=/opt/wifi-monitor
+
+# Resource limits
+MemoryLimit=256M
+CPUQuota=50%
 
 [Install]
 WantedBy=multi-user.target
