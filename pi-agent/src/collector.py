@@ -3,6 +3,7 @@ import random
 import subprocess
 import re
 import logging
+import shutil
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 
@@ -11,15 +12,20 @@ logger = logging.getLogger(__name__)
 
 
 class StatsCollector:
-    def __init__(self, simulation_mode: bool = False, interface: str = "wlan0", 
+    def __init__(self, simulation_mode: bool = False, interface: str = "wlan0", hotspot_mode: bool = False,
                  min_bytes: int = 1024, max_bytes: int = 104857600, alert_probability: float = 0.3):
         self.simulation_mode = simulation_mode
         self.interface = interface
+        self.hotspot_mode = hotspot_mode
         self.min_bytes = min_bytes
         self.max_bytes = max_bytes
         self.alert_probability = alert_probability
         self._tracked_devices = set()  # Track which devices have iptables rules
         self._last_counters = {}  # Store last counter values for delta calculation
+        self._warned_mac_destination = False
+        self._warned_iw_unavailable = False
+        self.iptables_cmd = self._detect_iptables_cmd()
+        self.supports_mac_destination = self._detect_mac_destination_support()
     
     def collect(self, devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Collect usage stats for devices. Returns list of stat dicts."""
@@ -58,6 +64,13 @@ class StatsCollector:
         and reads counters for existing ones.
         """
         stats = []
+
+        # Hotspot mode: prefer per-station counters from iw
+        if self.hotspot_mode:
+            stats = self._collect_from_iw(devices)
+            if stats:
+                logger.info(f"Collected stats for {len(stats)} devices (iw)")
+                return stats
         
         # Ensure iptables rules exist for all devices
         for device in devices:
@@ -76,6 +89,92 @@ class StatsCollector:
         
         logger.info(f"Collected stats for {len(stats)} devices")
         return stats
+
+    def _collect_from_iw(self, devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Collect per-device stats using iw station dump."""
+        stats = []
+        if not devices:
+            return stats
+
+        if not shutil.which("iw"):
+            if not self._warned_iw_unavailable:
+                logger.warning("iw not installed; falling back to iptables/proc")
+                self._warned_iw_unavailable = True
+            return stats
+
+        try:
+            result = subprocess.run(
+                ["sudo", "iw", "dev", self.interface, "station", "dump"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                return stats
+
+            station_bytes = {}
+            current_mac = None
+            for line in result.stdout.split("\n"):
+                match = re.match(r"^Station\s+([0-9A-Fa-f:]{17})\s+", line)
+                if match:
+                    current_mac = match.group(1).upper()
+                    station_bytes[current_mac] = {"rx": 0, "tx": 0}
+                    continue
+
+                if current_mac:
+                    rx_match = re.search(r"rx bytes:\s+(\d+)", line)
+                    tx_match = re.search(r"tx bytes:\s+(\d+)", line)
+                    if rx_match:
+                        station_bytes[current_mac]["rx"] = int(rx_match.group(1))
+                    if tx_match:
+                        station_bytes[current_mac]["tx"] = int(tx_match.group(1))
+
+            device_macs = {d["mac_address"].upper(): d for d in devices if d.get("mac_address")}
+            for mac, values in station_bytes.items():
+                if mac not in device_macs:
+                    continue
+
+                # iw counters are from the AP perspective:
+                # rx = bytes received by AP (device uploaded), tx = bytes sent by AP (device downloaded)
+                current_up = values.get("rx", 0)
+                current_down = values.get("tx", 0)
+
+                last_up = self._last_counters.get(f"{mac}_iw_up", 0)
+                last_down = self._last_counters.get(f"{mac}_iw_down", 0)
+
+                delta_up = max(0, current_up - last_up)
+                delta_down = max(0, current_down - last_down)
+
+                self._last_counters[f"{mac}_iw_up"] = current_up
+                self._last_counters[f"{mac}_iw_down"] = current_down
+
+                stats.append({
+                    "mac_address": mac,
+                    "bytes_uploaded": delta_up,
+                    "bytes_downloaded": delta_down
+                })
+
+        except Exception as e:
+            logger.error(f"Error collecting from iw: {e}")
+
+        return stats
+
+    def _detect_iptables_cmd(self) -> str:
+        """Select iptables binary, preferring iptables-legacy if available."""
+        if shutil.which("iptables-legacy"):
+            return "iptables-legacy"
+        return "iptables"
+
+    def _detect_mac_destination_support(self) -> bool:
+        """Check whether iptables supports --mac-destination (nf_tables does not)."""
+        try:
+            result = subprocess.run([self.iptables_cmd, "-V"], capture_output=True, text=True, timeout=5)
+            version_info = (result.stdout or "") + (result.stderr or "")
+            if "nf_tables" in version_info:
+                return False
+        except Exception:
+            pass
+        return True
     
     def _setup_iptables_rules(self, mac: str) -> bool:
         """
@@ -90,19 +189,23 @@ class StatsCollector:
             
             # Add rules for upload (from device) - OUTPUT chain
             upload_rule = [
-                "sudo", "iptables", "-A", "WIFI_MONITOR_OUT",
+                "sudo", self.iptables_cmd, "-A", "WIFI_MONITOR_OUT",
                 "-m", "mac", "--mac-source", mac,
                 "-j", "RETURN"
             ]
             subprocess.run(upload_rule, capture_output=True, check=True, timeout=5)
             
             # Add rules for download (to device) - FORWARD chain for bridged traffic
-            download_rule = [
-                "sudo", "iptables", "-A", "WIFI_MONITOR_IN",
-                "-m", "mac", "--mac-destination", mac,
-                "-j", "RETURN"
-            ]
-            subprocess.run(download_rule, capture_output=True, check=True, timeout=5)
+            if self.supports_mac_destination:
+                download_rule = [
+                    "sudo", self.iptables_cmd, "-A", "WIFI_MONITOR_IN",
+                    "-m", "mac", "--mac-destination", mac,
+                    "-j", "RETURN"
+                ]
+                subprocess.run(download_rule, capture_output=True, check=True, timeout=5)
+            elif not self._warned_mac_destination:
+                logger.warning("iptables backend does not support --mac-destination; using interface stats")
+                self._warned_mac_destination = True
             
             logger.info(f"Created iptables rules for device {mac}")
             return True
@@ -119,22 +222,22 @@ class StatsCollector:
         try:
             # Check if chains exist
             result = subprocess.run(
-                ["sudo", "iptables", "-L", "WIFI_MONITOR_OUT", "-n"],
+                ["sudo", self.iptables_cmd, "-L", "WIFI_MONITOR_OUT", "-n"],
                 capture_output=True,
                 timeout=5
             )
             
             if result.returncode != 0:
                 # Create chains
-                subprocess.run(["sudo", "iptables", "-N", "WIFI_MONITOR_OUT"], 
+                subprocess.run(["sudo", self.iptables_cmd, "-N", "WIFI_MONITOR_OUT"], 
                              capture_output=True, timeout=5)
-                subprocess.run(["sudo", "iptables", "-N", "WIFI_MONITOR_IN"], 
+                subprocess.run(["sudo", self.iptables_cmd, "-N", "WIFI_MONITOR_IN"], 
                              capture_output=True, timeout=5)
                 
                 # Insert jump rules to custom chains
-                subprocess.run(["sudo", "iptables", "-I", "FORWARD", "1", "-j", "WIFI_MONITOR_OUT"],
+                subprocess.run(["sudo", self.iptables_cmd, "-I", "FORWARD", "1", "-j", "WIFI_MONITOR_OUT"],
                              capture_output=True, timeout=5)
-                subprocess.run(["sudo", "iptables", "-I", "FORWARD", "1", "-j", "WIFI_MONITOR_IN"],
+                subprocess.run(["sudo", self.iptables_cmd, "-I", "FORWARD", "1", "-j", "WIFI_MONITOR_IN"],
                              capture_output=True, timeout=5)
                 
                 logger.info("Created WIFI_MONITOR chains")
@@ -144,11 +247,14 @@ class StatsCollector:
     def _collect_from_iptables(self, devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Read byte counters from iptables rules."""
         stats = []
+
+        if not self.supports_mac_destination:
+            return stats
         
         try:
             # Get rules with counters
             result = subprocess.run(
-                ["sudo", "iptables", "-L", "WIFI_MONITOR_OUT", "-n", "-v", "-x"],
+                ["sudo", self.iptables_cmd, "-L", "WIFI_MONITOR_OUT", "-n", "-v", "-x"],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -162,7 +268,7 @@ class StatsCollector:
             
             # Get download stats
             result = subprocess.run(
-                ["sudo", "iptables", "-L", "WIFI_MONITOR_IN", "-n", "-v", "-x"],
+                ["sudo", self.iptables_cmd, "-L", "WIFI_MONITOR_IN", "-n", "-v", "-x"],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -274,21 +380,21 @@ class StatsCollector:
         """Remove iptables rules on shutdown."""
         try:
             # Flush custom chains
-            subprocess.run(["sudo", "iptables", "-F", "WIFI_MONITOR_OUT"], 
+            subprocess.run(["sudo", self.iptables_cmd, "-F", "WIFI_MONITOR_OUT"], 
                          capture_output=True, timeout=5)
-            subprocess.run(["sudo", "iptables", "-F", "WIFI_MONITOR_IN"], 
+            subprocess.run(["sudo", self.iptables_cmd, "-F", "WIFI_MONITOR_IN"], 
                          capture_output=True, timeout=5)
             
             # Remove jump rules
-            subprocess.run(["sudo", "iptables", "-D", "FORWARD", "-j", "WIFI_MONITOR_OUT"],
+            subprocess.run(["sudo", self.iptables_cmd, "-D", "FORWARD", "-j", "WIFI_MONITOR_OUT"],
                          capture_output=True, timeout=5)
-            subprocess.run(["sudo", "iptables", "-D", "FORWARD", "-j", "WIFI_MONITOR_IN"],
+            subprocess.run(["sudo", self.iptables_cmd, "-D", "FORWARD", "-j", "WIFI_MONITOR_IN"],
                          capture_output=True, timeout=5)
             
             # Delete chains
-            subprocess.run(["sudo", "iptables", "-X", "WIFI_MONITOR_OUT"], 
+            subprocess.run(["sudo", self.iptables_cmd, "-X", "WIFI_MONITOR_OUT"], 
                          capture_output=True, timeout=5)
-            subprocess.run(["sudo", "iptables", "-X", "WIFI_MONITOR_IN"], 
+            subprocess.run(["sudo", self.iptables_cmd, "-X", "WIFI_MONITOR_IN"], 
                          capture_output=True, timeout=5)
             
             logger.info("Cleaned up iptables rules")

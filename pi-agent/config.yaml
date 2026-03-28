@@ -22,7 +22,7 @@ auth:
 
 # Simulation mode for POC testing without real hardware
 # Set to false for production on Raspberry Pi
-simulation_mode: true
+simulation_mode: false
 
 # Scan interval in seconds (how often to scan for new devices)
 scan_interval: 30

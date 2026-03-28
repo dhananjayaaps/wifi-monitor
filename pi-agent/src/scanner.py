@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class NetworkScanner:
-    def __init__(self, simulation_mode: bool = False, interface: str = "wlan0"):
+    def __init__(self, simulation_mode: bool = False, interface: str = "wlan0", hotspot_mode: bool = False):
         self.simulation_mode = simulation_mode
         self.interface = interface
+        self.hotspot_mode = hotspot_mode
         self._simulated_devices = []
         self._oui_database = {}
         self._load_oui_database()
@@ -59,9 +60,14 @@ class NetworkScanner:
         3. Use nmap if available (active, requires root)
         """
         devices = []
+
+        # Hotspot mode: prefer DHCP leases and neighbor table
+        if self.hotspot_mode:
+            devices = self._scan_hotspot_clients()
         
         # Method 1: Read ARP table (works without root)
-        devices = self._scan_arp_table()
+        if not devices:
+            devices = self._scan_arp_table()
         
         # Method 2: If ARP table is empty or we need more info, try arp-scan
         if not devices:
@@ -73,14 +79,131 @@ class NetworkScanner:
         
         # Enhance device information
         for device in devices:
-            # Resolve hostname
-            device["hostname"] = self._resolve_hostname(device["ip_address"])
+            # Resolve hostname if IP is known
+            if device.get("ip_address"):
+                device["hostname"] = self._resolve_hostname(device["ip_address"])
             # Lookup manufacturer
             device["manufacturer"] = self._lookup_manufacturer(device["mac_address"])
             # Guess device type (basic heuristics)
             device["device_type"] = self._guess_device_type(device)
         
         logger.info(f"Scanned {len(devices)} devices on network")
+        return devices
+
+    def _scan_hotspot_clients(self) -> List[Dict[str, Any]]:
+        """Scan hotspot clients using DHCP leases and neighbor table."""
+        devices = []
+
+        leases = self._scan_dnsmasq_leases()
+        neighbors = self._scan_ip_neigh()
+        stations = self._scan_iw_station_dump()
+
+        # Merge by MAC address, preferring lease data for hostname/IP
+        merged = {}
+        for device in stations + neighbors + leases:
+            mac = device.get("mac_address")
+            if not mac:
+                continue
+            mac = mac.upper()
+            existing = merged.get(mac, {})
+            merged[mac] = {
+                "mac_address": mac,
+                "ip_address": device.get("ip_address") or existing.get("ip_address"),
+                "hostname": device.get("hostname") or existing.get("hostname"),
+                "manufacturer": device.get("manufacturer") or existing.get("manufacturer"),
+                "device_type": device.get("device_type") or existing.get("device_type") or "unknown",
+            }
+
+        devices = list(merged.values())
+        logger.info(f"Hotspot scan found {len(devices)} devices")
+        return devices
+
+    def _scan_dnsmasq_leases(self) -> List[Dict[str, Any]]:
+        """Read DHCP leases from dnsmasq for hotspot clients."""
+        devices = []
+        lease_files = [
+            Path("/var/lib/misc/dnsmasq.leases"),
+            Path("/var/lib/dnsmasq/dnsmasq.leases"),
+        ]
+
+        lease_file = next((p for p in lease_files if p.exists()), None)
+        if not lease_file:
+            return devices
+
+        try:
+            with open(lease_file, "r") as f:
+                for line in f:
+                    # Format: <expiry> <mac> <ip> <hostname> <clientid>
+                    parts = line.strip().split()
+                    if len(parts) >= 4:
+                        mac = parts[1].upper()
+                        ip = parts[2]
+                        hostname = parts[3] if parts[3] != "*" else None
+                        devices.append({
+                            "mac_address": mac,
+                            "ip_address": ip,
+                            "hostname": hostname,
+                            "manufacturer": None,
+                            "device_type": "unknown",
+                        })
+        except Exception as e:
+            logger.error(f"Error reading dnsmasq leases: {e}")
+
+        return devices
+
+    def _scan_ip_neigh(self) -> List[Dict[str, Any]]:
+        """Read neighbor table for the hotspot interface."""
+        devices = []
+
+        try:
+            cmd = ["ip", "neigh", "show", "dev", self.interface]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                return devices
+
+            for line in result.stdout.split("\n"):
+                # Example: 192.168.50.23 lladdr AA:BB:CC:DD:EE:FF REACHABLE
+                match = re.search(r"(\d+\.\d+\.\d+\.\d+).*lladdr\s+([0-9A-Fa-f:]{17})", line)
+                if match:
+                    ip, mac = match.groups()
+                    devices.append({
+                        "mac_address": mac.upper(),
+                        "ip_address": ip,
+                        "hostname": None,
+                        "manufacturer": None,
+                        "device_type": "unknown",
+                    })
+        except Exception as e:
+            logger.error(f"Error reading neighbor table: {e}")
+
+        return devices
+
+    def _scan_iw_station_dump(self) -> List[Dict[str, Any]]:
+        """Read connected station MACs from iw for the hotspot interface."""
+        devices = []
+
+        try:
+            cmd = ["iw", "dev", self.interface, "station", "dump"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                return devices
+
+            for line in result.stdout.split("\n"):
+                match = re.match(r"^Station\s+([0-9A-Fa-f:]{17})\s+", line)
+                if match:
+                    mac = match.group(1).upper()
+                    devices.append({
+                        "mac_address": mac,
+                        "ip_address": None,
+                        "hostname": None,
+                        "manufacturer": None,
+                        "device_type": "unknown",
+                    })
+        except FileNotFoundError:
+            logger.warning("iw not installed")
+        except Exception as e:
+            logger.error(f"Error reading iw station dump: {e}")
+
         return devices
     
     def _scan_arp_table(self) -> List[Dict[str, Any]]:

@@ -15,7 +15,7 @@ def _serialize(device):
     return device.to_dict()
 
 
-@devices_bp.route("/", methods=["GET"])
+@devices_bp.route("", methods=["GET"], strict_slashes=False)
 @jwt_required()
 def list_devices():
     user_id = get_jwt_identity()
@@ -23,7 +23,7 @@ def list_devices():
     return jsonify({"status": "success", "data": [_serialize(d) for d in devices]})
 
 
-@devices_bp.route("/", methods=["POST"])
+@devices_bp.route("", methods=["POST"], strict_slashes=False)
 @jwt_required()
 def create_device():
     user_id = get_jwt_identity()

@@ -12,7 +12,7 @@ def _serialize(alert):
     return alert.to_dict()
 
 
-@alerts_bp.route("/", methods=["GET"])
+@alerts_bp.route("", methods=["GET"], strict_slashes=False)
 @jwt_required()
 def list_alerts():
     user_id = get_jwt_identity()
@@ -20,7 +20,7 @@ def list_alerts():
     return jsonify({"status": "success", "data": [_serialize(a) for a in alerts]})
 
 
-@alerts_bp.route("/", methods=["POST"])
+@alerts_bp.route("", methods=["POST"], strict_slashes=False)
 @jwt_required()
 def create_alert():
     user_id = get_jwt_identity()

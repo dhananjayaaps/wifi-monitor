@@ -29,11 +29,13 @@ class Agent:
         )
         self.scanner = NetworkScanner(
             simulation_mode=self.config.simulation_mode,
-            interface=self.config.interface
+            interface=self.config.interface,
+            hotspot_mode=self.config.hotspot_mode
         )
         self.collector = StatsCollector(
             simulation_mode=self.config.simulation_mode,
             interface=self.config.interface,
+            hotspot_mode=self.config.hotspot_mode,
             min_bytes=self.config.simulation_min_bytes,
             max_bytes=self.config.simulation_max_bytes
         )
