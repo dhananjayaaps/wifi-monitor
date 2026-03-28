@@ -65,9 +65,9 @@ class Agent:
         self.logger.info(f"Stats interval: {self.config.stats_interval}s")
         self.logger.info(f"Log level: {self.config.log_level}")
         
-        if not self.config.auth_email or not self.config.auth_password:
+        if not self.config.api_key and (not self.config.auth_email or not self.config.auth_password):
             self.logger.error("Authentication credentials not configured!")
-            self.logger.error("Please set auth.email and auth.password in config.yaml")
+            self.logger.error("Please set auth.api_key or auth.email/auth.password in config.yaml")
             return
         
         # Authenticate with retry logic
@@ -127,8 +127,17 @@ class Agent:
                     return False
                 
                 self.logger.info("✓ Connected to backend")
-                
-                # Authenticate
+
+                # Prefer configured API key (stable across restarts)
+                if self.config.api_key:
+                    self.client.set_api_key(self.config.api_key)
+                    if self.client.ping():
+                        self.logger.info("✓ Authenticated with API key")
+                        self.authenticated = True
+                        return True
+                    self.logger.warning("API key ping failed; falling back to login")
+
+                # Authenticate via email/password to obtain or reuse API key
                 self.logger.info("Authenticating...")
                 api_key = self.client.login(self.config.auth_email, self.config.auth_password)
                 if not api_key:
@@ -137,10 +146,10 @@ class Agent:
                         time.sleep(self.config.retry_delay)
                         continue
                     return False
-                
+
                 self.logger.info("✓ Authenticated successfully")
                 self.logger.info(f"✓ Obtained API key: {api_key[:20]}...")
-                
+
                 # Test agent authentication
                 if not self.client.ping():
                     self.logger.error("Agent ping failed")
@@ -148,7 +157,7 @@ class Agent:
                         time.sleep(self.config.retry_delay)
                         continue
                     return False
-                
+
                 self.logger.info("✓ Agent ready")
                 self.authenticated = True
                 return True

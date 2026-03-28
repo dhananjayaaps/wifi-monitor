@@ -40,6 +40,10 @@ class Config:
     @property
     def auth_password(self) -> str:
         return self.get("auth.password", "")
+
+    @property
+    def api_key(self) -> str:
+        return self.get("auth.api_key", "")
     
     @property
     def simulation_mode(self) -> bool:

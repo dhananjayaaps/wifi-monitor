@@ -19,6 +19,8 @@ internet_interface: "eth0"  # Interface providing internet (eth0 or usb0 for don
 auth:
   email: "admin@wifi.com"
   password: "admin123"
+  # Optional: set a fixed API key to avoid re-registering after restarts
+  api_key: ""
 
 # Simulation mode for POC testing without real hardware
 # Set to false for production on Raspberry Pi

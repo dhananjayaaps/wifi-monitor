@@ -39,7 +39,7 @@ class BackendClient:
                 headers={"Authorization": f"Bearer {jwt_token}"},
                 timeout=5
             )
-            if response.status_code != 201:
+            if response.status_code not in (200, 201):
                 print(f"Agent registration failed: {response.status_code} - {response.text}")
                 return None
             
@@ -52,6 +52,11 @@ class BackendClient:
         except Exception as e:
             print(f"Login error: {e}")
             return None
+
+    def set_api_key(self, api_key: str) -> None:
+        self.api_key = api_key
+        if api_key:
+            self.session.headers.update({"X-Agent-API-Key": api_key})
     
     def health_check(self) -> bool:
         """Test backend connectivity (no auth required)."""

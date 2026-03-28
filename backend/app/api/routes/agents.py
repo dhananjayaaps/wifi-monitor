@@ -53,6 +53,16 @@ def register_agent():
     user_id = int(get_jwt_identity())
     
     name = data.get("name", "Pi Agent")
+
+    existing = Agent.query.filter_by(owner_id=user_id, name=name, is_active=True).first()
+    if existing:
+        return jsonify({
+            "status": "success",
+            "data": {
+                **existing.to_dict(),
+                "api_key": existing.api_key
+            }
+        }), 200
     
     agent = Agent(
         name=name,
@@ -71,6 +81,27 @@ def register_agent():
             "api_key": agent.api_key  # Only shown once
         }
     }), 201
+
+
+@agents_bp.route("/key", methods=["GET"])
+@jwt_required()
+def get_agent_key():
+    """Fetch the API key for an existing agent by name (for re-sync)."""
+    user_id = int(get_jwt_identity())
+    name = request.args.get("name", "pi-agent")
+
+    agent = Agent.query.filter_by(owner_id=user_id, name=name, is_active=True).first()
+    if not agent:
+        return jsonify({"status": "error", "message": "Agent not found"}), 404
+
+    return jsonify({
+        "status": "success",
+        "data": {
+            "agent_id": agent.id,
+            "name": agent.name,
+            "api_key": agent.api_key,
+        }
+    }), 200
 
 
 @agents_bp.route("/devices", methods=["POST"])
