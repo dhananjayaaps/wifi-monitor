@@ -25,6 +25,7 @@ def create_app() -> Flask:
 		JWT_SECRET_KEY=settings.jwt_secret_key,
 		SQLALCHEMY_DATABASE_URI=settings.database_url,
 		SQLALCHEMY_TRACK_MODIFICATIONS=False,
+		DEFAULT_DEVICE_CAP=None,
 	)
 
 	# Configure CORS FIRST to handle preflight requests properly

@@ -66,3 +66,9 @@ export const alertsAPI = {
   update: (id: number, data: any) => apiClient.put(`/alerts/${id}`, data),
   history: (hours: number = 24) => apiClient.get(`/alerts/history?hours=${hours}`),
 };
+
+export const settingsAPI = {
+  get: () => apiClient.get('/system/settings'),
+  update: (default_device_cap: number | null) =>
+    apiClient.put('/system/settings', { default_device_cap }),
+};

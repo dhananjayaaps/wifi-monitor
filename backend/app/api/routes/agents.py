@@ -1,5 +1,5 @@
 """Agent endpoints for Pi-agent device sync and usage ingestion."""
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 from datetime import datetime
@@ -119,6 +119,7 @@ def sync_devices(agent):
         
         device = Device.query.filter_by(mac_address=mac).first()
         if not device:
+            default_cap = current_app.config.get("DEFAULT_DEVICE_CAP")
             device = Device(
                 owner_id=agent.owner_id,
                 mac_address=mac,
@@ -128,7 +129,8 @@ def sync_devices(agent):
                 device_type=dev_data.get("device_type"),
                 first_seen=datetime.utcnow(),
                 last_seen=datetime.utcnow(),
-                is_active=True
+                is_active=True,
+                data_cap=default_cap
             )
             db.session.add(device)
         else:

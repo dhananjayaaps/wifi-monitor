@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Wifi, AlertTriangle, Server } from 'lucide-react';
+import { LayoutDashboard, Wifi, AlertTriangle, Server, Settings } from 'lucide-react';
 
 export function DashboardNav() {
   const pathname = usePathname();
@@ -12,6 +12,7 @@ export function DashboardNav() {
     { href: '/dashboard/devices', label: 'Devices', icon: Wifi },
     { href: '/dashboard/alerts', label: 'Alerts', icon: AlertTriangle },
     { href: '/dashboard/agents', label: 'Agents', icon: Server },
+    { href: '/dashboard/settings', label: 'Settings', icon: Settings },
   ];
 
   return (

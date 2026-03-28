@@ -1,5 +1,5 @@
 """Device routes."""
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 from ...schemas.device import DeviceCreate, DeviceUpdate
@@ -30,7 +30,12 @@ def create_device():
     payload = request.get_json(silent=True) or {}
     data = DeviceCreate(**payload)
     try:
-        device = device_service.create_device(owner_id=user_id, **data.dict())
+        device_kwargs = data.dict()
+        if device_kwargs.get("data_cap") is None:
+            default_cap = current_app.config.get("DEFAULT_DEVICE_CAP")
+            if default_cap is not None:
+                device_kwargs["data_cap"] = default_cap
+        device = device_service.create_device(owner_id=user_id, **device_kwargs)
     except device_service.DeviceError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": _serialize(device)}), 201

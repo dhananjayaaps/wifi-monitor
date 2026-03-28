@@ -57,6 +57,19 @@ const formatBytes = (bytes: number) => {
   return `${value.toFixed(value < 10 && unitIndex > 0 ? 2 : 1)} ${units[unitIndex]}`;
 };
 
+const bytesToMBString = (bytes?: number | null) => {
+  if (!bytes || !Number.isFinite(bytes)) return '';
+  return (bytes / (1024 * 1024)).toFixed(2);
+};
+
+const mbStringToBytes = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed.length) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+  return Math.round(parsed * 1024 * 1024);
+};
+
 /* ---------------- Device Icon Mapping ---------------- */
 
 const deviceTypeIconMap: Record<
@@ -148,13 +161,13 @@ export default function DevicesPage() {
         const updated = data.find((d: Device) => d.id === desiredId);
         if (updated) {
           setSelectedDevice(updated);
-          setCapInput(updated.data_cap ? String(updated.data_cap) : "");
+          setCapInput(bytesToMBString(updated.data_cap));
           return;
         }
       }
 
       setSelectedDevice(data[0]);
-      setCapInput(data[0].data_cap ? String(data[0].data_cap) : "");
+      setCapInput(bytesToMBString(data[0].data_cap));
     } catch (error) {
       console.error('Failed to load devices:', error);
     } finally {
@@ -195,7 +208,7 @@ export default function DevicesPage() {
 
   const handleDeviceSelect = (device: Device) => {
     setSelectedDevice(device);
-    setCapInput(device.data_cap ? String(device.data_cap) : "");
+    setCapInput(bytesToMBString(device.data_cap));
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('deviceId', String(device.id));
     router.replace(`?${nextParams.toString()}`);
@@ -205,17 +218,32 @@ export default function DevicesPage() {
     setRangeHours(hours);
   };
 
+  const latestUsage = stats.length > 0 ? stats[stats.length - 1] : null;
+  const latestTotalBytes = latestUsage
+    ? (latestUsage.bytes_uploaded || 0) + (latestUsage.bytes_downloaded || 0)
+    : 0;
+  const isOverCap = Boolean(
+    selectedDevice?.data_cap && latestTotalBytes >= selectedDevice.data_cap
+  );
+  const totalRangeBytes = stats.reduce(
+    (sum, stat) => sum + (stat.bytes_uploaded || 0) + (stat.bytes_downloaded || 0),
+    0
+  );
+  const totalRangeUpload = stats.reduce(
+    (sum, stat) => sum + (stat.bytes_uploaded || 0),
+    0
+  );
+  const totalRangeDownload = stats.reduce(
+    (sum, stat) => sum + (stat.bytes_downloaded || 0),
+    0
+  );
+
   const saveCap = async () => {
     if (!selectedDevice) return;
-    let value: number | null = null;
-    const trimmed = capInput.trim();
-    if (trimmed.length > 0) {
-      const parsed = Number(trimmed);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        alert('Please enter a valid non-negative number of bytes, or leave empty to clear.');
-        return;
-      }
-      value = parsed;
+    const value = mbStringToBytes(capInput);
+    if (value === undefined) {
+      alert('Please enter a valid non-negative number of MB, or leave empty to clear.');
+      return;
     }
     try {
       const resp = await devicesAPI.setCap(selectedDevice.id, value);
@@ -223,7 +251,7 @@ export default function DevicesPage() {
       // Update local state for devices and selected device
       setDevices((prev) => prev.map((d) => d.id === updated.id ? updated : d));
       setSelectedDevice(updated);
-      setCapInput(updated.data_cap ? String(updated.data_cap) : "");
+      setCapInput(bytesToMBString(updated.data_cap));
     } catch (e) {
       console.error('Failed to save cap', e);
       alert('Failed to save data cap.');
@@ -351,6 +379,26 @@ export default function DevicesPage() {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {isOverCap && (
+                    <div className="col-span-2 md:col-span-3 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                      Usage exceeded the device cap. Latest interval: {formatBytes(latestTotalBytes)}
+                      {selectedDevice?.data_cap ? ` (cap ${formatBytes(selectedDevice.data_cap)})` : ''}.
+                    </div>
+                  )}
+                  <div className="col-span-2 md:col-span-3 rounded border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="text-sm text-slate-600">Total Usage (selected range)</p>
+                    <div className="mt-1 flex flex-wrap gap-4">
+                      <span className="text-sm font-medium text-slate-900">
+                        Total: {formatBytes(totalRangeBytes)}
+                      </span>
+                      <span className="text-sm text-slate-700">
+                        Upload: {formatBytes(totalRangeUpload)}
+                      </span>
+                      <span className="text-sm text-slate-700">
+                        Download: {formatBytes(totalRangeDownload)}
+                      </span>
+                    </div>
+                  </div>
                   <DetailItem
                     label="IP Address"
                     value={selectedDevice.ip_address}
@@ -378,14 +426,14 @@ export default function DevicesPage() {
                     ).toLocaleDateString()}
                   />
                   <div className="col-span-2">
-                    <p className="text-sm text-slate-600">Data Cap (bytes)</p>
+                    <p className="text-sm text-slate-600">Data Cap (MB)</p>
                     <div className="flex items-center gap-2 mt-1">
                       <input
                         type="text"
                         value={capInput}
                         onChange={(e) => setCapInput(e.target.value)}
                         className="border rounded px-3 py-2 w-full max-w-md"
-                        placeholder="e.g. 1073741824 for 1 GB, empty to clear"
+                        placeholder="e.g. 1024 for 1 GB, empty to clear"
                       />
                       <button
                         onClick={saveCap}
@@ -395,7 +443,7 @@ export default function DevicesPage() {
                       </button>
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
-                      Current: {selectedDevice.data_cap ? `${selectedDevice.data_cap} bytes` : 'No cap set'}
+                      Current: {selectedDevice.data_cap ? `${bytesToMBString(selectedDevice.data_cap)} MB` : 'No cap set'}
                     </p>
                     <div className="flex flex-wrap gap-3 mt-4">
                       <button
