@@ -45,6 +45,18 @@ interface Stats {
   timestamp: string;
 }
 
+const formatBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes)) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = Math.max(0, bytes);
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value < 10 && unitIndex > 0 ? 2 : 1)} ${units[unitIndex]}`;
+};
+
 /* ---------------- Device Icon Mapping ---------------- */
 
 const deviceTypeIconMap: Record<
@@ -441,13 +453,15 @@ export default function DevicesPage() {
                             : date.toLocaleTimeString();
                         }}
                       />
-                      <YAxis />
-                      <Tooltip
-                        formatter={(value: any) =>
-                          `${(value / 1024 / 1024).toFixed(2)} MB`
-                        }
+                      <YAxis
+                        width={84}
+                        tickMargin={8}
+                        tickFormatter={(value) => formatBytes(value)}
                       />
-                      <Legend />
+                      <Tooltip
+                        formatter={(value: any) => formatBytes(Number(value))}
+                      />
+                      <Legend wrapperStyle={{ paddingLeft: 8 }} />
                       <Line
                         type="monotone"
                         dataKey="bytes_uploaded"

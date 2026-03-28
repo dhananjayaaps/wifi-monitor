@@ -177,13 +177,13 @@ class StatsCollector:
     def _detect_mac_destination_support(self) -> bool:
         """Check whether iptables supports --mac-destination (nf_tables does not)."""
         try:
-            result = subprocess.run([self.iptables_cmd, "-V"], capture_output=True, text=True, timeout=5)
-            version_info = (result.stdout or "") + (result.stderr or "")
-            if "nf_tables" in version_info:
-                return False
+            result = subprocess.run([self.iptables_cmd, "-m", "mac", "--help"], capture_output=True, text=True, timeout=5)
+            help_text = (result.stdout or "") + (result.stderr or "")
+            if "--mac-destination" in help_text:
+                return True
+            return False
         except Exception:
-            pass
-        return True
+            return False
     
     def _setup_iptables_rules(self, mac: str) -> bool:
         """

@@ -372,6 +372,10 @@ class NetworkScanner:
     
     def _load_oui_database(self):
         """Load OUI database (IEEE manufacturer mappings)."""
+        # Prefer system OUI database if available; fall back to embedded sample.
+        if self._load_oui_from_system():
+            return
+
         # Simple embedded database with common manufacturers
         # In production, you'd download this from IEEE or use a library
         self._oui_database = {
@@ -405,6 +409,72 @@ class NetworkScanner:
             "F4F5D8": "Google",
             "A0ED4E": "Google",
         }
+
+    def _load_oui_from_system(self) -> bool:
+        """Load OUI mappings from common system files if present."""
+        candidates = [
+            Path("/usr/share/ieee-data/oui.txt"),
+            Path("/usr/share/ieee-data/oui.csv"),
+            Path("/var/lib/ieee-data/oui.txt"),
+            Path("/usr/share/misc/oui.txt"),
+        ]
+
+        for path in candidates:
+            if path.exists():
+                try:
+                    count = self._parse_oui_file(path)
+                    if count > 0:
+                        logger.info(f"Loaded {count} OUIs from {path}")
+                        return True
+                except Exception as e:
+                    logger.warning(f"Failed to read OUI file {path}: {e}")
+
+        return False
+
+    def _parse_oui_file(self, path: Path) -> int:
+        """Parse OUI file formats (txt/csv) into the OUI database."""
+        self._oui_database = {}
+        count = 0
+
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                if path.suffix.lower() == ".csv":
+                    # Format: "OUI","Company Name","Company Address"
+                    if line.startswith("\""):
+                        parts = [p.strip('"') for p in line.split(",")]
+                        if parts and len(parts[0]) >= 6:
+                            oui = parts[0].replace(":", "").replace("-", "")[:6].upper()
+                            vendor = parts[1] if len(parts) > 1 else ""
+                            if len(oui) == 6 and vendor:
+                                self._oui_database[oui] = vendor
+                                count += 1
+                    continue
+
+                # Common txt format: "FC-34-97   (hex)            Intel Corporate"
+                if "(hex)" in line:
+                    parts = line.split("(hex)")
+                    if len(parts) >= 2:
+                        oui_part = parts[0].strip()
+                        vendor = parts[1].strip()
+                        oui = oui_part.replace("-", "").replace(":", "").upper()
+                        if len(oui) == 6 and vendor:
+                            self._oui_database[oui] = vendor
+                            count += 1
+                    continue
+
+                # Alternative txt format: "FC3497     Intel Corporate"
+                if len(line) >= 6 and line[:6].isalnum():
+                    oui = line[:6].replace("-", "").replace(":", "").upper()
+                    vendor = line[6:].strip()
+                    if len(oui) == 6 and vendor:
+                        self._oui_database[oui] = vendor
+                        count += 1
+
+        return count
     
     def _guess_device_type(self, device: Dict[str, Any]) -> str:
         """Guess device type based on hostname and manufacturer."""
@@ -431,6 +501,10 @@ class NetworkScanner:
             return "smartphone"
         elif "samsung" in manufacturer:
             return "smartphone"
+        elif any(vendor in manufacturer for vendor in [
+            "tp-link", "tplink", "netgear", "d-link", "dlink", "asus", "ubiquiti", "mikrotik"
+        ]):
+            return "router"
         elif "amazon" in manufacturer:
             return "iot_device"
         elif "google" in manufacturer:
