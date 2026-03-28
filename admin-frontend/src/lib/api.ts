@@ -41,10 +41,17 @@ export const authAPI = {
 export const devicesAPI = {
   list: () => apiClient.get('/devices'),
   get: (id: number) => apiClient.get(`/devices/${id}`),
-  getStats: (id: number, hours: number = 24) =>
-    apiClient.get(`/devices/${id}/stats?hours=${hours}`),
+  getStats: (id: number, hours: number = 24, bucketMinutes?: number) => {
+    const params = new URLSearchParams({ hours: String(hours) });
+    if (bucketMinutes && bucketMinutes > 0) {
+      params.set('bucket_minutes', String(bucketMinutes));
+    }
+    return apiClient.get(`/devices/${id}/stats?${params.toString()}`);
+  },
   setCap: (id: number, data_cap: number | null) =>
     apiClient.put(`/devices/${id}/cap`, { data_cap }),
+  delete: (id: number) => apiClient.delete(`/devices/${id}`),
+  clearStats: (id: number) => apiClient.delete(`/devices/${id}/stats`),
 };
 
 export const agentsAPI = {

@@ -106,6 +106,7 @@ def get_device_stats(device_id: int):
     
     # Get hours parameter (default 24)
     hours = request.args.get('hours', 24, type=int)
+    bucket_minutes = request.args.get('bucket_minutes', type=int)
     since = datetime.utcnow() - timedelta(hours=hours)
     
     # Query device stats
@@ -113,8 +114,46 @@ def get_device_stats(device_id: int):
         DeviceStat.device_id == device_id,
         DeviceStat.timestamp >= since
     ).order_by(DeviceStat.timestamp.asc()).all()
+
+    if bucket_minutes and bucket_minutes > 0:
+        bucket_seconds = bucket_minutes * 60
+        buckets = {}
+        for stat in stats:
+            ts = stat.timestamp
+            bucket_epoch = int(ts.timestamp() // bucket_seconds) * bucket_seconds
+            bucket_ts = datetime.utcfromtimestamp(bucket_epoch)
+            key = bucket_ts.isoformat()
+            if key not in buckets:
+                buckets[key] = {
+                    "timestamp": key,
+                    "bytes_uploaded": 0,
+                    "bytes_downloaded": 0,
+                }
+            buckets[key]["bytes_uploaded"] += stat.bytes_uploaded or 0
+            buckets[key]["bytes_downloaded"] += stat.bytes_downloaded or 0
+
+        data = [buckets[k] for k in sorted(buckets.keys())]
+        return jsonify({
+            "status": "success",
+            "data": data
+        }), 200
     
     return jsonify({
         "status": "success",
         "data": [stat.to_dict() for stat in stats]
     }), 200
+
+
+@devices_bp.route("/<int:device_id>/stats", methods=["DELETE"])
+@jwt_required()
+def clear_device_stats(device_id: int):
+    """Delete all usage statistics for a device."""
+    user_id = get_jwt_identity()
+    device = device_service.get_device(owner_id=user_id, device_id=device_id)
+    if not device:
+        return jsonify({"status": "error", "message": "Device not found"}), 404
+
+    deleted = DeviceStat.query.filter(DeviceStat.device_id == device_id).delete(synchronize_session=False)
+    db.session.commit()
+
+    return jsonify({"status": "success", "data": {"deleted": deleted}}), 200

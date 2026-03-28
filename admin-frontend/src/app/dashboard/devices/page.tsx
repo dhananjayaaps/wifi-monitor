@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { devicesAPI } from '@/lib/api';
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -80,46 +83,114 @@ function DeviceIcon({
 /* ---------------- Main Component ---------------- */
 
 export default function DevicesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [stats, setStats] = useState<Stats[]>([]);
   const [loading, setLoading] = useState(true);
   const [capInput, setCapInput] = useState<string>("");
+  const [isClearingStats, setIsClearingStats] = useState(false);
+  const [isDeletingDevice, setIsDeletingDevice] = useState(false);
+  const [rangeHours, setRangeHours] = useState(24);
+  const isRefreshingDevices = useRef(false);
+  const isRefreshingStats = useRef(false);
 
-  useEffect(() => {
-    const loadDevices = async () => {
-      try {
-        const response = await devicesAPI.list();
-        const data = response.data.data || [];
-        setDevices(data);
-        if (data.length > 0) {
-          setSelectedDevice(data[0]);
-          setCapInput(data[0].data_cap ? String(data[0].data_cap) : "");
-          loadStats(data[0].id);
-        }
-      } catch (error) {
-        console.error('Failed to load devices:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const devicesRefreshMs = 30000;
 
-    loadDevices();
-  }, []);
+  const getBucketMinutes = (hours: number) => {
+    if (hours <= 6) return 1;
+    if (hours <= 24) return 5;
+    if (hours <= 168) return 30;
+    return 120;
+  };
 
-  const loadStats = async (deviceId: number) => {
+  const getStatsRefreshMs = (hours: number) => {
+    if (hours <= 6) return 30000;
+    if (hours <= 24) return 60000;
+    if (hours <= 168) return 300000;
+    return 600000;
+  };
+
+  const loadDevices = async () => {
+    if (isRefreshingDevices.current) return;
+    isRefreshingDevices.current = true;
     try {
-      const response = await devicesAPI.getStats(deviceId);
+      const response = await devicesAPI.list();
+      const data = response.data.data || [];
+      setDevices(data);
+
+      if (data.length === 0) {
+        setSelectedDevice(null);
+        setCapInput("");
+        setStats([]);
+        return;
+      }
+
+      const urlDeviceId = Number(searchParams.get('deviceId'));
+      const desiredId = Number.isFinite(urlDeviceId) && urlDeviceId > 0
+        ? urlDeviceId
+        : selectedDevice?.id;
+
+      if (desiredId) {
+        const updated = data.find((d: Device) => d.id === desiredId);
+        if (updated) {
+          setSelectedDevice(updated);
+          setCapInput(updated.data_cap ? String(updated.data_cap) : "");
+          return;
+        }
+      }
+
+      setSelectedDevice(data[0]);
+      setCapInput(data[0].data_cap ? String(data[0].data_cap) : "");
+    } catch (error) {
+      console.error('Failed to load devices:', error);
+    } finally {
+      setLoading(false);
+      isRefreshingDevices.current = false;
+    }
+  };
+
+  const loadStats = async (deviceId: number, hours: number = rangeHours) => {
+    if (isRefreshingStats.current) return;
+    isRefreshingStats.current = true;
+    try {
+      const bucketMinutes = getBucketMinutes(hours);
+      const response = await devicesAPI.getStats(deviceId, hours, bucketMinutes);
       setStats(response.data.data || []);
     } catch (error) {
       console.error('Failed to load stats:', error);
+    } finally {
+      isRefreshingStats.current = false;
     }
   };
+
+  useEffect(() => {
+    loadDevices();
+    const intervalId = window.setInterval(loadDevices, devicesRefreshMs);
+    return () => window.clearInterval(intervalId);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!selectedDevice) return;
+    loadStats(selectedDevice.id, rangeHours);
+    const refreshMs = getStatsRefreshMs(rangeHours);
+    const intervalId = window.setInterval(() => {
+      loadStats(selectedDevice.id, rangeHours);
+    }, refreshMs);
+    return () => window.clearInterval(intervalId);
+  }, [selectedDevice?.id, rangeHours]);
 
   const handleDeviceSelect = (device: Device) => {
     setSelectedDevice(device);
     setCapInput(device.data_cap ? String(device.data_cap) : "");
-    loadStats(device.id);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('deviceId', String(device.id));
+    router.replace(`?${nextParams.toString()}`);
+  };
+
+  const handleRangeChange = (hours: number) => {
+    setRangeHours(hours);
   };
 
   const saveCap = async () => {
@@ -144,6 +215,55 @@ export default function DevicesPage() {
     } catch (e) {
       console.error('Failed to save cap', e);
       alert('Failed to save data cap.');
+    }
+  };
+
+  const clearStats = async () => {
+    if (!selectedDevice || isClearingStats) return;
+    const confirmClear = window.confirm(
+      'Clear all usage data for this device? This cannot be undone.'
+    );
+    if (!confirmClear) return;
+
+    setIsClearingStats(true);
+    try {
+      await devicesAPI.clearStats(selectedDevice.id);
+      setStats([]);
+    } catch (e) {
+      console.error('Failed to clear stats', e);
+      alert('Failed to clear device usage data.');
+    } finally {
+      setIsClearingStats(false);
+    }
+  };
+
+  const deleteDevice = async () => {
+    if (!selectedDevice || isDeletingDevice) return;
+    const confirmDelete = window.confirm(
+      'Delete this device and all of its data? This cannot be undone.'
+    );
+    if (!confirmDelete) return;
+
+    setIsDeletingDevice(true);
+    try {
+      await devicesAPI.delete(selectedDevice.id);
+      setDevices((prev) => prev.filter((d) => d.id !== selectedDevice.id));
+
+      const remaining = devices.filter((d) => d.id !== selectedDevice.id);
+      if (remaining.length > 0) {
+        setSelectedDevice(remaining[0]);
+        setCapInput(remaining[0].data_cap ? String(remaining[0].data_cap) : "");
+        loadStats(remaining[0].id);
+      } else {
+        setSelectedDevice(null);
+        setCapInput("");
+        setStats([]);
+      }
+    } catch (e) {
+      console.error('Failed to delete device', e);
+      alert('Failed to delete device.');
+    } finally {
+      setIsDeletingDevice(false);
     }
   };
 
@@ -265,6 +385,22 @@ export default function DevicesPage() {
                     <p className="text-xs text-slate-500 mt-1">
                       Current: {selectedDevice.data_cap ? `${selectedDevice.data_cap} bytes` : 'No cap set'}
                     </p>
+                    <div className="flex flex-wrap gap-3 mt-4">
+                      <button
+                        onClick={clearStats}
+                        disabled={isClearingStats}
+                        className="border border-amber-500 text-amber-700 px-4 py-2 rounded hover:bg-amber-50 disabled:opacity-60"
+                      >
+                        {isClearingStats ? 'Clearing...' : 'Clear Usage Data'}
+                      </button>
+                      <button
+                        onClick={deleteDevice}
+                        disabled={isDeletingDevice}
+                        className="border border-red-500 text-red-700 px-4 py-2 rounded hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {isDeletingDevice ? 'Deleting...' : 'Delete Device'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -275,16 +411,35 @@ export default function DevicesPage() {
                   Usage Stats
                 </h3>
 
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {[1, 6, 24, 168, 720].map((hours) => (
+                    <button
+                      key={hours}
+                      onClick={() => handleRangeChange(hours)}
+                      className={`px-3 py-1 rounded text-sm border transition ${
+                        rangeHours === hours
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {hours >= 24 ? `${hours / 24}d` : `${hours}h`}
+                    </button>
+                  ))}
+                </div>
+
                 {stats.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stats.slice(-10)}>
+                    <LineChart data={stats}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
                         dataKey="timestamp"
                         tick={{ fontSize: 12 }}
-                        tickFormatter={(time) =>
-                          new Date(time).toLocaleTimeString()
-                        }
+                        tickFormatter={(time) => {
+                          const date = new Date(time);
+                          return rangeHours > 24
+                            ? date.toLocaleDateString()
+                            : date.toLocaleTimeString();
+                        }}
                       />
                       <YAxis />
                       <Tooltip
@@ -293,17 +448,21 @@ export default function DevicesPage() {
                         }
                       />
                       <Legend />
-                      <Bar
+                      <Line
+                        type="monotone"
                         dataKey="bytes_uploaded"
                         name="Upload"
-                        fill="#3b82f6"
+                        stroke="#3b82f6"
+                        dot={false}
                       />
-                      <Bar
+                      <Line
+                        type="monotone"
                         dataKey="bytes_downloaded"
                         name="Download"
-                        fill="#10b981"
+                        stroke="#10b981"
+                        dot={false}
                       />
-                    </BarChart>
+                    </LineChart>
                   </ResponsiveContainer>
                 ) : (
                   <p className="text-slate-600">

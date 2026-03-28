@@ -28,7 +28,7 @@ simulation_mode: false
 scan_interval: 30
 
 # Stats collection interval in seconds (how often to collect usage stats)
-stats_interval: 60
+stats_interval: 30
 
 # Logging configuration
 log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL

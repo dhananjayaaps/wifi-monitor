@@ -51,7 +51,7 @@ class Config:
     
     @property
     def stats_interval(self) -> int:
-        return self.get("stats_interval", 60)
+        return self.get("stats_interval", 30)
     
     @property
     def simulation_device_count(self) -> int:

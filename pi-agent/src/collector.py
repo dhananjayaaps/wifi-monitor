@@ -139,14 +139,23 @@ class StatsCollector:
                 current_up = values.get("rx", 0)
                 current_down = values.get("tx", 0)
 
-                last_up = self._last_counters.get(f"{mac}_iw_up", 0)
-                last_down = self._last_counters.get(f"{mac}_iw_down", 0)
+                key_up = f"{mac}_iw_up"
+                key_down = f"{mac}_iw_down"
+
+                # Initialize counters on first sight to avoid sending totals.
+                if key_up not in self._last_counters or key_down not in self._last_counters:
+                    self._last_counters[key_up] = current_up
+                    self._last_counters[key_down] = current_down
+                    continue
+
+                last_up = self._last_counters.get(key_up, 0)
+                last_down = self._last_counters.get(key_down, 0)
 
                 delta_up = max(0, current_up - last_up)
                 delta_down = max(0, current_down - last_down)
 
-                self._last_counters[f"{mac}_iw_up"] = current_up
-                self._last_counters[f"{mac}_iw_down"] = current_down
+                self._last_counters[key_up] = current_up
+                self._last_counters[key_down] = current_down
 
                 stats.append({
                     "mac_address": mac,
@@ -285,15 +294,24 @@ class StatsCollector:
                 current_down = download_bytes.get(mac, 0)
                 
                 # Calculate delta since last collection
-                last_up = self._last_counters.get(f"{mac}_up", 0)
-                last_down = self._last_counters.get(f"{mac}_down", 0)
+                key_up = f"{mac}_up"
+                key_down = f"{mac}_down"
+
+                # Initialize counters on first sight to avoid sending totals.
+                if key_up not in self._last_counters or key_down not in self._last_counters:
+                    self._last_counters[key_up] = current_up
+                    self._last_counters[key_down] = current_down
+                    continue
+
+                last_up = self._last_counters.get(key_up, 0)
+                last_down = self._last_counters.get(key_down, 0)
                 
                 delta_up = max(0, current_up - last_up)
                 delta_down = max(0, current_down - last_down)
                 
                 # Store current values for next delta
-                self._last_counters[f"{mac}_up"] = current_up
-                self._last_counters[f"{mac}_down"] = current_down
+                self._last_counters[key_up] = current_up
+                self._last_counters[key_down] = current_down
                 
                 stats.append({
                     "mac_address": mac,
@@ -346,14 +364,23 @@ class StatsCollector:
                             tx_bytes = int(parts[9])
                             
                             # Calculate delta
-                            last_rx = self._last_counters.get('interface_rx', 0)
-                            last_tx = self._last_counters.get('interface_tx', 0)
+                            key_rx = "interface_rx"
+                            key_tx = "interface_tx"
+
+                            # Initialize counters on first read to avoid totals.
+                            if key_rx not in self._last_counters or key_tx not in self._last_counters:
+                                self._last_counters[key_rx] = rx_bytes
+                                self._last_counters[key_tx] = tx_bytes
+                                return stats
+
+                            last_rx = self._last_counters.get(key_rx, 0)
+                            last_tx = self._last_counters.get(key_tx, 0)
                             
                             delta_rx = max(0, rx_bytes - last_rx)
                             delta_tx = max(0, tx_bytes - last_tx)
                             
-                            self._last_counters['interface_rx'] = rx_bytes
-                            self._last_counters['interface_tx'] = tx_bytes
+                            self._last_counters[key_rx] = rx_bytes
+                            self._last_counters[key_tx] = tx_bytes
                             
                             # Distribute evenly across devices (not accurate, but better than nothing)
                             if devices:
