@@ -71,4 +71,17 @@ def recent_alert_history():
     user_id = get_jwt_identity()
     hours = request.args.get("hours", 24, type=int)
     histories = alert_service.list_recent_history(user_id=user_id, hours=hours)
-    return jsonify({"status": "success", "data": [h.to_dict() for h in histories]})
+    data = []
+    for history in histories:
+        alert = history.alert
+        device = history.device
+        payload = history.to_dict()
+        if alert:
+            payload["alert_type"] = alert.alert_type
+            payload["threshold_value"] = alert.threshold_value
+        if device:
+            payload["device_mac"] = device.mac_address
+            payload["device_hostname"] = device.hostname
+        data.append(payload)
+
+    return jsonify({"status": "success", "data": data})

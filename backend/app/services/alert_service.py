@@ -2,7 +2,7 @@
 from typing import List, Optional
 from datetime import datetime, timedelta
 from ..extensions import db
-from ..models import Alert, AlertHistory, Device
+from ..models import Alert, AlertHistory, Device, aggregate_device_usage
 
 
 def list_alerts(user_id: int) -> List[Alert]:
@@ -64,8 +64,9 @@ def evaluate_usage_alerts(user_id: int, device_id: int, total_bytes: int) -> Lis
         device = None
 
     if device and device.data_cap is not None:
-        # If device has a cap and total_bytes exceeds it, ensure there's a data_cap alert and record it
-        if total_bytes >= device.data_cap:
+        usage_totals = aggregate_device_usage(device_id)
+        cap_total = usage_totals.get("total_bytes", 0)
+        if cap_total >= device.data_cap:
             data_cap_alert = Alert.query.filter_by(
                 user_id=user_id,
                 device_id=device_id,
@@ -84,7 +85,13 @@ def evaluate_usage_alerts(user_id: int, device_id: int, total_bytes: int) -> Lis
                 db.session.add(data_cap_alert)
                 db.session.commit()
 
-            triggered.append(record_alert_trigger(data_cap_alert, device_id, total_bytes))
+            latest = (
+                AlertHistory.query.filter_by(alert_id=data_cap_alert.id)
+                .order_by(AlertHistory.triggered_at.desc())
+                .first()
+            )
+            if latest is None or (datetime.utcnow() - latest.triggered_at) > timedelta(hours=1):
+                triggered.append(record_alert_trigger(data_cap_alert, device_id, cap_total))
 
     return triggered
 

@@ -14,12 +14,26 @@ interface Device {
   device_type?: string;
 }
 
-interface Alert {
+interface AlertHistoryItem {
   id: number;
-  title: string;
-  threshold: number;
-  status: string;
+  alert_id: number;
+  device_id: number | null;
+  value_at_trigger: number;
+  triggered_at: string;
+  resolved_at?: string | null;
 }
+
+const formatBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes)) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = Math.max(0, bytes);
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value < 10 && unitIndex > 0 ? 2 : 1)} ${units[unitIndex]}`;
+};
 
 const deviceTypeIconMap: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
   smartphone: Smartphone,
@@ -41,7 +55,7 @@ function DeviceIcon({ type, active }: { type?: string; active?: boolean }) {
 
 export default function DashboardPage() {
   const [devices, setDevices] = useState<Device[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<AlertHistoryItem[]>([]);
   const [agentCount, setAgentCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +64,7 @@ export default function DashboardPage() {
       try {
         const [devicesRes, alertsRes, agentsRes] = await Promise.all([
           devicesAPI.list(),
-          alertsAPI.list(),
+          alertsAPI.history(24),
           agentsAPI.list(),
         ]);
 
@@ -68,6 +82,12 @@ export default function DashboardPage() {
   }, []);
 
   const activeDevices = devices.filter((d) => d.is_active).length;
+  const deviceName = (device_id: number | null) => {
+    if (!device_id) return 'Unknown device';
+    const device = devices.find((d) => d.id === device_id);
+    if (!device) return `Device ${device_id}`;
+    return device.hostname || device.mac_address;
+  };
 
   return (
     <div className="px-8 py-8">
@@ -92,8 +112,8 @@ export default function DashboardPage() {
         />
         <StatCard
           icon={<AlertTriangle className="text-orange-600" size={24} />}
-          label="Active Alerts"
-          value={alerts.filter((a) => a.status === 'active').length}
+          label="Alerts (24h)"
+          value={alerts.length}
         />
       </div>
 
@@ -166,13 +186,14 @@ export default function DashboardPage() {
             <div className="space-y-3">
               {alerts.slice(0, 5).map((alert) => (
                 <div key={alert.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <h3 className="font-semibold text-slate-900 text-sm">{alert.title}</h3>
+                  <h3 className="font-semibold text-slate-900 text-sm">Data usage alert</h3>
                   <p className="text-xs text-slate-600 mt-1">
-                    Threshold: {alert.threshold} MB/s
+                    Device: {deviceName(alert.device_id)}
                   </p>
-                  <span className="text-xs font-medium text-orange-600 mt-2 block">
-                    {alert.status}
-                  </span>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-600">
+                    <span>Value: {formatBytes(alert.value_at_trigger)}</span>
+                    <span>{new Date(alert.triggered_at).toLocaleString()}</span>
+                  </div>
                 </div>
               ))}
             </div>

@@ -218,13 +218,6 @@ export default function DevicesPage() {
     setRangeHours(hours);
   };
 
-  const latestUsage = stats.length > 0 ? stats[stats.length - 1] : null;
-  const latestTotalBytes = latestUsage
-    ? (latestUsage.bytes_uploaded || 0) + (latestUsage.bytes_downloaded || 0)
-    : 0;
-  const isOverCap = Boolean(
-    selectedDevice?.data_cap && latestTotalBytes >= selectedDevice.data_cap
-  );
   const totalRangeBytes = stats.reduce(
     (sum, stat) => sum + (stat.bytes_uploaded || 0) + (stat.bytes_downloaded || 0),
     0
@@ -236,6 +229,9 @@ export default function DevicesPage() {
   const totalRangeDownload = stats.reduce(
     (sum, stat) => sum + (stat.bytes_downloaded || 0),
     0
+  );
+  const isOverCap = Boolean(
+    selectedDevice?.data_cap && totalRangeBytes >= selectedDevice.data_cap
   );
 
   const saveCap = async () => {
@@ -381,7 +377,7 @@ export default function DevicesPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {isOverCap && (
                     <div className="col-span-2 md:col-span-3 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-                      Usage exceeded the device cap. Latest interval: {formatBytes(latestTotalBytes)}
+                      Usage exceeded the device cap for this range. Total: {formatBytes(totalRangeBytes)}
                       {selectedDevice?.data_cap ? ` (cap ${formatBytes(selectedDevice.data_cap)})` : ''}.
                     </div>
                   )}
