@@ -1,0 +1,68 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Secrets / local config
+.env
+.env.*
+*.key
+*.pem
+
+# Runtime / temp files
+tmp/
+temp/
+*.tmp
+*.pid
+
+# Captures / datasets / model artifacts (common in Wi-Fi DDoS projects)
+pcaps/
+captures/
+data/
+datasets/
+artifacts/
+models/
+*.pcap
+*.pcapng
+*.csv
+*.parquet
+*.h5
+*.pt
+*.pth
+*.onnx
+
+*.joblib
