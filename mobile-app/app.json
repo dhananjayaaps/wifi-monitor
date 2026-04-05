@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "WiFi Monitor",
+    "slug": "wifi-monitor-mobile",
+    "version": "1.0.0",
+    "scheme": "wifimonitor",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "bundleIdentifier": "com.wifimonitor.app",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.wifimonitor.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
