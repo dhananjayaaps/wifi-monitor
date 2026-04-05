@@ -64,7 +64,14 @@ export const alertsAPI = {
   get: (id: number) => apiClient.get(`/alerts/${id}`),
   create: (data: any) => apiClient.post('/alerts', data),
   update: (id: number, data: any) => apiClient.put(`/alerts/${id}`, data),
-  history: (hours: number = 24) => apiClient.get(`/alerts/history?hours=${hours}`),
+  history: (params?: { hours?: number; limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.hours != null) query.set('hours', String(params.hours));
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    const suffix = query.toString();
+    return apiClient.get(`/alerts/history${suffix ? `?${suffix}` : ''}`);
+  },
 };
 
 export const settingsAPI = {

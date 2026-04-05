@@ -32,13 +32,19 @@ const formatBytes = (bytes: number) => {
 export default function AlertsPage() {
   const [history, setHistory] = useState<AlertHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [hours, setHours] = useState<number | undefined>(24);
+  const pageSize = 25;
   const refreshMs = 30000;
 
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        const histResp = await alertsAPI.history(24);
-        setHistory(histResp.data.data || []);
+        const histResp = await alertsAPI.history({ hours, limit: pageSize, offset: 0 });
+        const items = histResp.data.data || [];
+        setHistory(items);
+        setHasMore(items.length === pageSize);
       } catch (error) {
         console.error('Failed to load alert history:', error);
       } finally {
@@ -49,7 +55,26 @@ export default function AlertsPage() {
     loadHistory();
     const intervalId = window.setInterval(loadHistory, refreshMs);
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [hours]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const histResp = await alertsAPI.history({
+        hours,
+        limit: pageSize,
+        offset: history.length,
+      });
+      const items = histResp.data.data || [];
+      setHistory((prev) => [...prev, ...items]);
+      setHasMore(items.length === pageSize);
+    } catch (error) {
+      console.error('Failed to load older alerts:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const deviceName = (item: AlertHistoryItem) => {
     if (item.device_hostname) return item.device_hostname;
@@ -66,6 +91,33 @@ export default function AlertsPage() {
         <p className="text-slate-600">Loading...</p>
       ) : (
         <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-slate-600" htmlFor="history-hours">
+              Time range
+            </label>
+            <select
+              id="history-hours"
+              className="rounded-md border border-slate-300 px-3 py-1 text-sm"
+              value={hours ?? 'all'}
+              onChange={(event) => {
+                const value = event.target.value;
+                setLoading(true);
+                setHistory([]);
+                setHasMore(true);
+                if (value === 'all') {
+                  setHours(undefined);
+                } else {
+                  setHours(Number(value));
+                }
+              }}
+            >
+              <option value="24">Last 24 hours</option>
+              <option value="72">Last 3 days</option>
+              <option value="168">Last 7 days</option>
+              <option value="720">Last 30 days</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
           {history.length > 0 ? (
             history.map((item) => (
               <div key={item.id} className="bg-white rounded-lg shadow p-6 border-l-4 border-red-400">
@@ -96,6 +148,18 @@ export default function AlertsPage() {
           ) : (
             <div className="bg-white rounded-lg shadow p-12 text-center">
               <p className="text-slate-600 text-lg">No alerts in the last 24 hours</p>
+            </div>
+          )}
+          {history.length > 0 && (
+            <div className="flex justify-center pt-4">
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={loadMore}
+                disabled={!hasMore || loadingMore}
+              >
+                {loadingMore ? 'Loading...' : hasMore ? 'Load older alerts' : 'No more alerts'}
+              </button>
             </div>
           )}
         </div>
