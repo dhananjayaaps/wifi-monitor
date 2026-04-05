@@ -107,3 +107,22 @@ class BackendClient:
         except Exception as e:
             print(f"Stats ingestion error: {e}")
             return None
+
+    def ingest_detection_alerts(self, alerts: List[Dict[str, Any]]) -> Optional[Dict]:
+        """Send DDoS/DOS detection alerts to backend."""
+        if not alerts:
+            return None
+
+        try:
+            response = self.session.post(
+                f"{self.base_url}/agents/alerts",
+                json={"alerts": alerts}
+            )
+            if response.status_code == 201:
+                return response.json()
+            else:
+                print(f"Alert ingestion failed: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            print(f"Alert ingestion error: {e}")
+            return None

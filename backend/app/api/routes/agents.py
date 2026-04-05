@@ -199,6 +199,52 @@ def ingest_stats(agent):
     }), 201
 
 
+@agents_bp.route("/alerts", methods=["POST"])
+@agent_required
+def ingest_alerts(agent):
+    """Ingest DDoS/DOS detection alerts from agent."""
+    data = request.get_json() or {}
+    alerts_data = data.get("alerts", [])
+    cooldown_seconds = int(data.get("cooldown_seconds", 300))
+
+    ingested = []
+    for alert in alerts_data:
+        mac = alert.get("mac_address")
+        if not mac:
+            continue
+
+        device = Device.query.filter_by(mac_address=mac).first()
+        if not device:
+            continue
+
+        alert_type = str(alert.get("alert_type", "")).lower()
+        if alert_type not in {"dos", "ddos"}:
+            continue
+
+        value = alert.get("total_bytes")
+        if value is None:
+            confidence = float(alert.get("confidence", 0))
+            value = int(round(confidence * 100))
+
+        history = alert_service.record_detection_alert(
+            user_id=agent.owner_id,
+            device_id=device.id,
+            alert_type=f"{alert_type}_detected",
+            value_at_trigger=int(value),
+            cooldown_seconds=cooldown_seconds,
+        )
+        if history:
+            ingested.append(mac)
+
+    return jsonify({
+        "status": "success",
+        "data": {
+            "ingested_count": len(ingested),
+            "ingested_macs": ingested
+        }
+    }), 201
+
+
 @agents_bp.route("/ping", methods=["GET"])
 @agent_required
 def ping(agent):

@@ -67,10 +67,18 @@ def update_alert(alert_id: int):
 def recent_alert_history():
     """Return alert history entries for the authenticated user's alerts in the last 24 hours.
     Optional `hours` query param may be provided to change the window.
+    Pagination via `limit` and `offset` query params.
     """
     user_id = get_jwt_identity()
-    hours = request.args.get("hours", 24, type=int)
-    histories = alert_service.list_recent_history(user_id=user_id, hours=hours)
+    hours = request.args.get("hours", type=int)
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    histories = alert_service.list_recent_history(
+        user_id=user_id,
+        hours=hours,
+        limit=limit,
+        offset=offset,
+    )
     data = []
     for history in histories:
         alert = history.alert
@@ -84,4 +92,13 @@ def recent_alert_history():
             payload["device_hostname"] = device.hostname
         data.append(payload)
 
-    return jsonify({"status": "success", "data": data})
+    return jsonify({"status": "success", "data": data, "meta": {"limit": limit, "offset": offset}})
+
+
+@alerts_bp.route("/history", methods=["DELETE"])
+@jwt_required()
+def clear_alert_history():
+    """Clear alert history entries for the authenticated user's alerts."""
+    user_id = get_jwt_identity()
+    deleted = alert_service.clear_alert_history(user_id=user_id)
+    return jsonify({"status": "success", "data": {"deleted": deleted}})

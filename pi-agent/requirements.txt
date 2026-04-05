@@ -1,6 +1,10 @@
 # Core dependencies for Pi Agent
 requests==2.31.0
 PyYAML==6.0.1
+joblib==1.3.2
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.4.2
 
 # For real network scanning (production use)
 # Uncomment if you want to use scapy instead of arp-scan/nmap

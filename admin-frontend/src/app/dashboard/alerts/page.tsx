@@ -33,6 +33,7 @@ export default function AlertsPage() {
   const [history, setHistory] = useState<AlertHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [hours, setHours] = useState<number | undefined>(24);
   const pageSize = 25;
@@ -56,6 +57,22 @@ export default function AlertsPage() {
     const intervalId = window.setInterval(loadHistory, refreshMs);
     return () => window.clearInterval(intervalId);
   }, [hours]);
+
+  const clearHistory = async () => {
+    if (clearing) return;
+    const confirmed = window.confirm('Clear all alert history? This cannot be undone.');
+    if (!confirmed) return;
+    setClearing(true);
+    try {
+      await alertsAPI.clearHistory();
+      setHistory([]);
+      setHasMore(false);
+    } catch (error) {
+      console.error('Failed to clear alert history:', error);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -83,6 +100,27 @@ export default function AlertsPage() {
     return 'Unknown device';
   };
 
+  const alertTitle = (item: AlertHistoryItem) => {
+    const type = (item.alert_type || '').toLowerCase();
+    if (type === 'ddos_detected') return 'DDoS detected';
+    if (type === 'dos_detected') return 'DoS detected';
+    if (type === 'data_cap') return 'Data cap exceeded';
+    return 'Data usage alert';
+  };
+
+  const showThreshold = (item: AlertHistoryItem) => {
+    const type = (item.alert_type || '').toLowerCase();
+    return type !== 'ddos_detected' && type !== 'dos_detected';
+  };
+
+  const valueLabel = (item: AlertHistoryItem) => {
+    const type = (item.alert_type || '').toLowerCase();
+    if (type === 'ddos_detected' || type === 'dos_detected') {
+      return 'Traffic at trigger';
+    }
+    return 'Value at trigger';
+  };
+
   return (
     <div className="px-8 py-8">
       <h1 className="text-4xl font-bold text-slate-900 mb-8">Alerts</h1>
@@ -91,7 +129,8 @@ export default function AlertsPage() {
         <p className="text-slate-600">Loading...</p>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 justify-between">
+            <div className="flex items-center gap-3">
             <label className="text-sm text-slate-600" htmlFor="history-hours">
               Time range
             </label>
@@ -117,6 +156,15 @@ export default function AlertsPage() {
               <option value="720">Last 30 days</option>
               <option value="all">All time</option>
             </select>
+            </div>
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={clearHistory}
+              disabled={clearing}
+            >
+              {clearing ? 'Clearing...' : 'Clear alerts'}
+            </button>
           </div>
           {history.length > 0 ? (
             history.map((item) => (
@@ -125,19 +173,19 @@ export default function AlertsPage() {
                   <AlertTriangle className="text-red-600 mt-1" size={20} />
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-slate-900">
-                      {item.alert_type === 'data_cap' ? 'Data cap exceeded' : 'Data usage alert'}
+                      {alertTitle(item)}
                     </h3>
                     <p className="text-slate-600 mt-1">
                       Device: {deviceName(item)}
                     </p>
-                    {item.threshold_value != null && (
+                    {showThreshold(item) && item.threshold_value != null && (
                       <p className="text-xs text-slate-500 mt-1">
                         Threshold: {formatBytes(item.threshold_value)}
                       </p>
                     )}
-                    <div className="flex items-center gap-4 mt-3 text-sm text-slate-600">
+                    <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-slate-600">
                       <span>
-                        Value at trigger: {formatBytes(item.value_at_trigger)}
+                        {valueLabel(item)}: {formatBytes(item.value_at_trigger)}
                       </span>
                       <span>{new Date(item.triggered_at).toLocaleString()}</span>
                     </div>

@@ -96,14 +96,73 @@ def evaluate_usage_alerts(user_id: int, device_id: int, total_bytes: int) -> Lis
     return triggered
 
 
-def list_recent_history(user_id: int, hours: int = 24) -> List[AlertHistory]:
-    """Return AlertHistory entries for a user within the last `hours` hours."""
-    since = datetime.utcnow() - timedelta(hours=hours)
-    # Join with Alert to ensure history belongs to user's alerts
+def list_recent_history(
+    user_id: int,
+    hours: Optional[int] = 24,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[AlertHistory]:
+    """Return AlertHistory entries for a user with optional time filter and pagination."""
+    query = AlertHistory.query.join(Alert).filter(Alert.user_id == user_id)
+
+    if hours is not None:
+        since = datetime.utcnow() - timedelta(hours=hours)
+        query = query.filter(AlertHistory.triggered_at >= since)
+
     histories = (
-        AlertHistory.query.join(Alert)
-        .filter(Alert.user_id == user_id, AlertHistory.triggered_at >= since)
-        .order_by(AlertHistory.triggered_at.desc())
+        query.order_by(AlertHistory.triggered_at.desc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
     return histories
+
+
+def record_detection_alert(
+    user_id: int,
+    device_id: int,
+    alert_type: str,
+    value_at_trigger: int,
+    cooldown_seconds: int = 300,
+) -> Optional[AlertHistory]:
+    """Ensure an alert exists for a detection and record it with cooldown."""
+    alert = Alert.query.filter_by(
+        user_id=user_id,
+        device_id=device_id,
+        alert_type=alert_type,
+    ).first()
+
+    if not alert:
+        alert = Alert(
+            user_id=user_id,
+            device_id=device_id,
+            alert_type=alert_type,
+            threshold_value=1,
+            is_enabled=True,
+        )
+        db.session.add(alert)
+        db.session.commit()
+
+    if cooldown_seconds:
+        latest = (
+            AlertHistory.query.filter_by(alert_id=alert.id, device_id=device_id)
+            .order_by(AlertHistory.triggered_at.desc())
+            .first()
+        )
+        if latest and (datetime.utcnow() - latest.triggered_at).total_seconds() < cooldown_seconds:
+            return None
+
+    return record_alert_trigger(alert, device_id, value_at_trigger)
+
+
+def clear_alert_history(user_id: int) -> int:
+    """Delete alert history entries for all alerts owned by the user."""
+    alert_ids = [alert.id for alert in Alert.query.filter_by(user_id=user_id).all()]
+    if not alert_ids:
+        return 0
+
+    deleted = AlertHistory.query.filter(AlertHistory.alert_id.in_(alert_ids)).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+    return deleted

@@ -55,6 +55,22 @@ The Pi Agent is a lightweight, efficient monitoring service designed to run on R
 - Fallback to interface-level monitoring
 - Delta calculation for accurate reporting
 
+✅ **DDoS Detection (Optional)**
+- Run a local ML model to classify normal/dos/ddos
+- Sends detection alerts to the backend
+
+### Test DDoS Alerts
+
+Use the simulation script to send fake DDoS/DOS alerts to the backend:
+
+```bash
+python scripts/simulate_ddos_alerts.py \
+       --api-key <YOUR_AGENT_API_KEY> \
+       --mac AA:BB:CC:DD:EE:01 \
+       --count 5 \
+       --repeat 2
+```
+
 ✅ **Production Ready**
 - Comprehensive error handling and retry logic
 - Graceful shutdown and cleanup

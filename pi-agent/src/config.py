@@ -96,3 +96,19 @@ class Config:
     @property
     def internet_interface(self) -> str:
         return self.get("internet_interface", "eth0")
+
+    @property
+    def ddos_enabled(self) -> bool:
+        return self.get("ddos_detector.enabled", False)
+
+    @property
+    def ddos_model_path(self) -> str:
+        return self.get("ddos_detector.model_path", "ddos_model.joblib")
+
+    @property
+    def ddos_min_confidence(self) -> float:
+        return self.get("ddos_detector.min_confidence", 0.7)
+
+    @property
+    def ddos_alert_cooldown_seconds(self) -> int:
+        return self.get("ddos_detector.alert_cooldown_seconds", 300)

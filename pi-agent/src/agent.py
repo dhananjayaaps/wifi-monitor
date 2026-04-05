@@ -9,6 +9,7 @@ from .config import Config
 from .client import BackendClient
 from .scanner import NetworkScanner
 from .collector import StatsCollector
+from .ddos_detector import DdosDetector
 from .logger import setup_logging, get_logger
 
 
@@ -39,6 +40,14 @@ class Agent:
             min_bytes=self.config.simulation_min_bytes,
             max_bytes=self.config.simulation_max_bytes
         )
+
+        self.ddos_detector = DdosDetector(
+            model_path=self.config.ddos_model_path,
+            enabled=self.config.ddos_enabled
+        )
+        self.ddos_min_confidence = self.config.ddos_min_confidence
+        self.ddos_alert_cooldown = self.config.ddos_alert_cooldown_seconds
+        self._last_ddos_alert = {}
         
         self.devices = []
         self.last_scan = 0
@@ -64,6 +73,10 @@ class Agent:
         self.logger.info(f"Scan interval: {self.config.scan_interval}s")
         self.logger.info(f"Stats interval: {self.config.stats_interval}s")
         self.logger.info(f"Log level: {self.config.log_level}")
+        if self.ddos_detector.enabled and not self.ddos_detector.is_ready():
+            self.logger.warning("DDoS detector enabled but model failed to load")
+        else:
+            self.logger.info(f"DDoS detector: {'ENABLED' if self.ddos_detector.enabled else 'DISABLED'}")
         
         if not self.config.api_key and (not self.config.auth_email or not self.config.auth_password):
             self.logger.error("Authentication credentials not configured!")
@@ -221,6 +234,46 @@ class Agent:
             self.logger.info(f"✓ Ingested {result['data']['ingested_count']} stats")
         else:
             self.logger.error("Failed to ingest stats after retries")
+
+        # Run DDoS detection on collected stats
+        if self.ddos_detector.enabled and self.ddos_detector.is_ready():
+            self._detect_and_alert(stats)
+
+    def _detect_and_alert(self, stats):
+        """Detect DDoS/DOS patterns and send alerts."""
+        devices_by_mac = {d.get("mac_address", "").upper(): d for d in self.devices}
+        detections = self.ddos_detector.predict(stats, devices_by_mac, self.config.stats_interval)
+        alerts = []
+        now = time.time()
+
+        for detection in detections:
+            prediction = detection.prediction.lower()
+            if prediction not in {"dos", "ddos"}:
+                continue
+            if detection.confidence < self.ddos_min_confidence:
+                continue
+
+            key = (detection.mac_address.upper(), prediction)
+            last_sent = self._last_ddos_alert.get(key, 0)
+            if now - last_sent < self.ddos_alert_cooldown:
+                continue
+
+            alerts.append({
+                "mac_address": detection.mac_address,
+                "alert_type": prediction,
+                "confidence": detection.confidence,
+                "total_bytes": detection.total_bytes,
+            })
+            self._last_ddos_alert[key] = now
+
+        if not alerts:
+            return
+
+        result = self.client.ingest_detection_alerts(alerts)
+        if result:
+            self.logger.warning(f"✓ DDoS alerts sent: {result['data']['ingested_count']}")
+        else:
+            self.logger.error("Failed to send DDoS alerts")
     
     def _ingest_with_retry(self, stats):
         """Ingest stats with retry logic."""

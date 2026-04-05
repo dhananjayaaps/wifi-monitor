@@ -72,6 +72,7 @@ export const alertsAPI = {
     const suffix = query.toString();
     return apiClient.get(`/alerts/history${suffix ? `?${suffix}` : ''}`);
   },
+  clearHistory: () => apiClient.delete('/alerts/history'),
 };
 
 export const settingsAPI = {
