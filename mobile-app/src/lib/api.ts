@@ -5,6 +5,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // For iOS simulator or physical device on LAN, use your machine's IP, e.g. http://192.168.1.x:5000/api/v1
 const API_BASE_URL = 'http://localhost:5000/api/v1';
 
+// Callback registered by AuthContext so a 401 triggers a full sign-out
+let _onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: () => void): void {
+  _onUnauthorized = handler;
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
@@ -22,6 +28,8 @@ apiClient.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem('access_token');
+      // Notify AuthContext so it clears token state and redirects to login
+      _onUnauthorized?.();
     }
     return Promise.reject(error);
   }

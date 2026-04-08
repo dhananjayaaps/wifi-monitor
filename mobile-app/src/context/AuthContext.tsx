@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setUnauthorizedHandler } from '@/lib/api';
 
 interface AuthContextType {
   token: string | null;
@@ -35,6 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.removeItem('access_token');
     setToken(null);
   };
+
+  // Register handler so api.ts 401 interceptor can trigger sign-out
+  useEffect(() => {
+    setUnauthorizedHandler(signOut);
+    return () => setUnauthorizedHandler(() => {});
+  }, []);
 
   return (
     <AuthContext.Provider value={{ token, isLoading, signIn, signOut }}>

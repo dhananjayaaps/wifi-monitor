@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { devicesAPI } from '@/lib/api';
@@ -97,6 +98,9 @@ export default function DevicesScreen() {
   const [showDetail, setShowDetail] = useState(false);
   const isRefreshingDevices = useRef(false);
   const isRefreshingStats = useRef(false);
+  // Ref that always reflects the latest selected device id — avoids stale closure
+  // in the loadDevices setInterval which captures state at mount time
+  const selectedDeviceIdRef = useRef<number | null>(null);
 
   const getBucketMinutes = (hours: number) => {
     if (hours <= 6) return 1;
@@ -110,17 +114,19 @@ export default function DevicesScreen() {
     isRefreshingDevices.current = true;
     try {
       const response = await devicesAPI.list();
-      const data = response.data.data || [];
+      const data: Device[] = response.data.data || [];
       setDevices(data);
       if (data.length === 0) {
         setSelectedDevice(null);
         setCapInput('');
-      } else if (!selectedDevice) {
-        setSelectedDevice(data[0]);
-        setCapInput(bytesToMBString(data[0].data_cap));
       } else {
-        const updated = data.find((d: Device) => d.id === selectedDevice?.id);
-        if (updated) {
+        // Use ref (not state) so the interval closure always reads the current id
+        const currentId = selectedDeviceIdRef.current;
+        if (!currentId) {
+          setSelectedDevice(data[0]);
+          setCapInput(bytesToMBString(data[0].data_cap));
+        } else {
+          const updated = data.find((d) => d.id === currentId) ?? data[0];
           setSelectedDevice(updated);
           setCapInput(bytesToMBString(updated.data_cap));
         }
@@ -152,6 +158,11 @@ export default function DevicesScreen() {
     const id = setInterval(loadDevices, 30000);
     return () => clearInterval(id);
   }, []);
+
+  // Keep selectedDeviceIdRef in sync so the interval closure reads the latest id
+  useEffect(() => {
+    selectedDeviceIdRef.current = selectedDevice?.id ?? null;
+  }, [selectedDevice?.id]);
 
   useEffect(() => {
     if (!selectedDevice) return;
@@ -434,7 +445,7 @@ function DetailItem({ label, value, mono }: { label: string; value: string; mono
   return (
     <View style={styles.detailItem}>
       <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={[styles.detailValue, mono && { fontFamily: 'monospace', fontSize: 11 }]}>{value}</Text>
+      <Text style={[styles.detailValue, mono && { fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 11 }]}>{value}</Text>
     </View>
   );
 }
@@ -485,7 +496,7 @@ const styles = StyleSheet.create({
   deviceTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', flex: 1, marginLeft: 10 },
   deviceHostname: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
   deviceIp: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  deviceMac: { fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', marginTop: 1 },
+  deviceMac: { fontSize: 11, color: '#94a3b8', fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', marginTop: 1 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   statusActive: { backgroundColor: '#dcfce7' },
   statusInactive: { backgroundColor: '#f1f5f9' },

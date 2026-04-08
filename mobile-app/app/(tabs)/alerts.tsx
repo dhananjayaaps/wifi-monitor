@@ -163,6 +163,7 @@ export default function AlertsScreen() {
       <View style={styles.toolbar}>
         <FlatList
           horizontal
+          style={{ flex: 1 }}
           data={RANGES}
           keyExtractor={(item) => String(item.value ?? 'all')}
           showsHorizontalScrollIndicator={false}
@@ -261,7 +262,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#cbd5e1',
     backgroundColor: '#fff',
-    marginLeft: 'auto',
   },
   clearBtnText: { fontSize: 13, color: '#dc2626' },
   alertCard: {

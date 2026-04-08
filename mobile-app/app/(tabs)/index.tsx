@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { devicesAPI, alertsAPI, agentsAPI } from '@/lib/api';
@@ -25,6 +26,9 @@ interface AlertHistoryItem {
   device_id: number | null;
   value_at_trigger: number;
   triggered_at: string;
+  alert_type?: string;
+  device_hostname?: string | null;
+  device_mac?: string | null;
 }
 
 const formatBytes = (bytes: number) => {
@@ -95,10 +99,20 @@ export default function DashboardScreen() {
 
   const activeDevices = devices.filter((d) => d.is_active).length;
 
-  const deviceName = (device_id: number | null) => {
-    if (!device_id) return 'Unknown device';
-    const device = devices.find((d) => d.id === device_id);
-    return device?.hostname || device?.mac_address || `Device ${device_id}`;
+  const deviceName = (alert: AlertHistoryItem) => {
+    if (alert.device_hostname) return alert.device_hostname;
+    if (alert.device_mac) return alert.device_mac;
+    if (!alert.device_id) return 'Unknown device';
+    const device = devices.find((d) => d.id === alert.device_id);
+    return device?.hostname || device?.mac_address || `Device ${alert.device_id}`;
+  };
+
+  const alertTitle = (type?: string) => {
+    const t = (type || '').toLowerCase();
+    if (t === 'ddos_detected') return 'DDoS Detected';
+    if (t === 'dos_detected') return 'DoS Detected';
+    if (t === 'data_cap') return 'Data Cap Exceeded';
+    return 'Data Usage Alert';
   };
 
   if (loading) {
@@ -186,8 +200,8 @@ export default function DashboardScreen() {
             <View key={alert.id} style={styles.alertRow}>
               <Ionicons name="warning" size={16} color="#dc2626" style={{ marginTop: 2 }} />
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.alertTitle}>Data usage alert</Text>
-                <Text style={styles.alertDevice}>Device: {deviceName(alert.device_id)}</Text>
+                <Text style={styles.alertTitle}>{alertTitle(alert.alert_type)}</Text>
+                <Text style={styles.alertDevice}>Device: {deviceName(alert)}</Text>
                 <Text style={styles.alertMeta}>
                   {formatBytes(alert.value_at_trigger)} · {new Date(alert.triggered_at).toLocaleString()}
                 </Text>
@@ -272,7 +286,7 @@ const styles = StyleSheet.create({
   deviceInfo: { flex: 1 },
   deviceHostname: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
   deviceIp: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  deviceMac: { fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', marginTop: 1 },
+  deviceMac: { fontSize: 11, color: '#94a3b8', fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', marginTop: 1 },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,

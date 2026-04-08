@@ -1,4 +1,4 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,16 +8,18 @@ function AuthGuard() {
   const { token, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  // Expo Router v5: wait for navigation state to be ready before redirecting
+  const navigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (!navigationState?.key || isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
     if (!token && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (token && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [token, isLoading, segments]);
+  }, [token, isLoading, segments, navigationState?.key]);
 
   if (isLoading) {
     return (
