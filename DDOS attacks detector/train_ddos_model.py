@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Train a DDoS detector model for normal/dos/ddos."""
+"""
+Train a DDoS / DoS detector model.
+
+Works with the synthetic dataset produced by generate_synthetic_dataset.py.
+The feature set is designed to match what the pi-agent can
+actually provide at runtime (bytes, packets, rates, ratios).
+
+Outputs a scikit-learn Pipeline saved as a joblib file.
+"""
 
 from __future__ import annotations
 
@@ -7,77 +15,68 @@ import argparse
 from typing import List
 
 import joblib
+import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import StandardScaler
 
 
-DROP_DEFAULT = {
-    "label",
-    "src_ip",
-    "dst_ip",
-    "dns_query",
-    "ssl_subject",
-    "ssl_issuer",
-    "http_uri",
-    "http_user_agent",
-    "http_orig_mime_types",
-    "http_resp_mime_types",
-    "weird_name",
-    "weird_addl",
-}
+# These are the features we expect — must match generate_synthetic_dataset.py
+FEATURE_COLUMNS: List[str] = [
+    "bytes_in",
+    "bytes_out",
+    "pkts_in",
+    "pkts_out",
+    "duration",
+    "bytes_per_sec_in",
+    "bytes_per_sec_out",
+    "pkt_size_avg_in",
+    "pkt_size_avg_out",
+    "byte_ratio",
+    "pkt_ratio",
+]
 
 
-def _build_features(df: pd.DataFrame, drop_cols: List[str]) -> pd.DataFrame:
-    drop = set(drop_cols)
-    if "type" in df.columns:
-        drop.add("type")
-    return df.drop(columns=[c for c in drop if c in df.columns])
-
-
-def train_model(input_path: str, model_out: str, test_size: float, seed: int, drop_cols: List[str]) -> None:
+def train_model(
+    input_path: str,
+    model_out: str,
+    test_size: float,
+    seed: int,
+) -> None:
     df = pd.read_csv(input_path)
     if "type" not in df.columns:
-        raise ValueError("Input dataset must contain a 'type' column with normal/dos/ddos.")
+        raise ValueError("Input dataset must contain a 'type' column (normal/dos/ddos).")
 
     df = df.dropna(subset=["type"])
     y = df["type"].astype(str).str.lower()
-    X = _build_features(df, drop_cols)
 
-    categorical_cols = X.select_dtypes(include=["object"]).columns.tolist()
-    numeric_cols = [c for c in X.columns if c not in categorical_cols]
+    # Use only the known feature columns
+    missing = [c for c in FEATURE_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing feature columns in input: {missing}")
 
-    categorical_pipeline = Pipeline(
+    X = df[FEATURE_COLUMNS].copy()
+
+    pipeline = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("encoder", OneHotEncoder(handle_unknown="ignore")),
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+            (
+                "model",
+                RandomForestClassifier(
+                    n_estimators=300,
+                    max_depth=20,
+                    random_state=seed,
+                    class_weight="balanced",
+                    n_jobs=-1,
+                ),
+            ),
         ]
     )
-
-    numeric_pipeline = Pipeline(
-        steps=[("imputer", SimpleImputer(strategy="median"))]
-    )
-
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("categorical", categorical_pipeline, categorical_cols),
-            ("numeric", numeric_pipeline, numeric_cols),
-        ]
-    )
-
-    model = RandomForestClassifier(
-        n_estimators=300,
-        random_state=seed,
-        class_weight="balanced",
-        n_jobs=-1,
-    )
-
-    pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("model", model)])
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=seed, stratify=y
@@ -86,45 +85,42 @@ def train_model(input_path: str, model_out: str, test_size: float, seed: int, dr
     pipeline.fit(X_train, y_train)
     preds = pipeline.predict(X_test)
 
-    print("Classification report:")
+    print("Classification Report:")
     print(classification_report(y_test, preds, digits=4))
-    print("Confusion matrix:")
-    print(confusion_matrix(y_test, preds))
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_test, preds, labels=["normal", "dos", "ddos"]))
+
+    # Store feature column list in the pipeline for runtime validation
+    pipeline.feature_columns_ = FEATURE_COLUMNS
 
     joblib.dump(pipeline, model_out)
-    print(f"Saved model to {model_out}")
+    print(f"\n✓ Saved model to {model_out}")
+
+    # Quick sanity check — load and predict one row
+    loaded = joblib.load(model_out)
+    sample = X_test.iloc[:1]
+    pred = loaded.predict(sample)
+    proba = loaded.predict_proba(sample)
+    print(f"  Sanity check: predicted={pred[0]}, confidence={proba.max():.3f}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train a DDoS detector model.")
-    parser.add_argument("--input", required=True, help="Path to training CSV")
+    parser = argparse.ArgumentParser(description="Train a DDoS/DoS detector model.")
+    parser.add_argument(
+        "--input",
+        default="synthetic_ddos_dataset.csv",
+        help="Path to training CSV (default: synthetic_ddos_dataset.csv)",
+    )
     parser.add_argument("--model-out", default="ddos_model.joblib")
     parser.add_argument("--test-size", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument(
-        "--include-ip",
-        action="store_true",
-        help="Include src_ip and dst_ip columns in training.",
-    )
-    parser.add_argument(
-        "--drop-cols",
-        nargs="*",
-        default=[],
-        help="Additional columns to drop.",
-    )
     args = parser.parse_args()
-
-    drop_cols = set(DROP_DEFAULT).union(args.drop_cols)
-    if args.include_ip:
-        drop_cols.discard("src_ip")
-        drop_cols.discard("dst_ip")
 
     train_model(
         input_path=args.input,
         model_out=args.model_out,
         test_size=args.test_size,
         seed=args.seed,
-        drop_cols=sorted(drop_cols),
     )
 
 

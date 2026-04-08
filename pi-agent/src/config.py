@@ -112,3 +112,23 @@ class Config:
     @property
     def ddos_alert_cooldown_seconds(self) -> int:
         return self.get("ddos_detector.alert_cooldown_seconds", 300)
+
+    @property
+    def audio_alerts_enabled(self) -> bool:
+        return self.get("audio_alerts.enabled", False)
+
+    @property
+    def audio_alerts_engine(self) -> str:
+        return self.get("audio_alerts.engine", "auto")
+
+    @property
+    def audio_alerts_volume(self) -> int:
+        return self.get("audio_alerts.volume", 80)
+
+    @property
+    def audio_alerts_language(self) -> str:
+        return self.get("audio_alerts.language", "en")
+
+    @property
+    def audio_alerts_cooldown(self) -> int:
+        return self.get("audio_alerts.cooldown_seconds", 60)

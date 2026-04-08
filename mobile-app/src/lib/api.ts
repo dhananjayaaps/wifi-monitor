@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // For Android emulator use: http://10.0.2.2:5000/api/v1
 // For iOS simulator or physical device on LAN, use your machine's IP, e.g. http://192.168.1.x:5000/api/v1
-const API_BASE_URL = 'http://localhost:5000/api/v1';
+const API_BASE_URL = 'http://192.168.1.7:5000/api/v1';
 
 // Callback registered by AuthContext so a 401 triggers a full sign-out
 let _onUnauthorized: (() => void) | null = null;

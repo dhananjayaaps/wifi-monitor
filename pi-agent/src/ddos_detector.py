@@ -1,13 +1,47 @@
-"""DDoS detector wrapper for the Pi agent."""
+"""DDoS detector wrapper for the Pi agent.
+
+Translates per-device stats collected by the StatsCollector into the
+feature vector expected by the trained ML model, then runs inference.
+
+The feature set matches what generate_synthetic_dataset.py /
+train_ddos_model.py produce:
+  bytes_in, bytes_out, pkts_in, pkts_out, duration,
+  bytes_per_sec_in, bytes_per_sec_out,
+  pkt_size_avg_in, pkt_size_avg_out,
+  byte_ratio, pkt_ratio
+"""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Dict, List, Optional
 
 import joblib
+import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
+
+# Must stay in sync with train_ddos_model.py / generate_synthetic_dataset.py
+FEATURE_COLUMNS: List[str] = [
+    "bytes_in",
+    "bytes_out",
+    "pkts_in",
+    "pkts_out",
+    "duration",
+    "bytes_per_sec_in",
+    "bytes_per_sec_out",
+    "pkt_size_avg_in",
+    "pkt_size_avg_out",
+    "byte_ratio",
+    "pkt_ratio",
+]
+
+# Average packet sizes used to estimate packet counts from byte counts.
+# Conservative MTU assumption for normal traffic.
+NORMAL_PKT_SIZE = 1000  # bytes
 
 
 @dataclass
@@ -23,7 +57,6 @@ class DdosDetector:
         self.model_path = model_path
         self.enabled = enabled
         self.model = None
-        self.feature_columns: Optional[List[str]] = None
 
         if self.enabled:
             self._load_model()
@@ -31,131 +64,124 @@ class DdosDetector:
     def _load_model(self) -> None:
         try:
             self.model = joblib.load(self.model_path)
-            preprocessor = getattr(self.model, "named_steps", {}).get("preprocessor")
-            if preprocessor is not None and hasattr(preprocessor, "feature_names_in_"):
-                self.feature_columns = list(preprocessor.feature_names_in_)
-            elif hasattr(self.model, "feature_names_in_"):
-                self.feature_columns = list(self.model.feature_names_in_)
-            else:
-                self.feature_columns = None
-        except Exception:
+            logger.info(f"Loaded DDoS model from {self.model_path}")
+        except FileNotFoundError:
+            logger.error(f"DDoS model file not found: {self.model_path}")
             self.model = None
-            self.feature_columns = None
+            self.enabled = False
+        except Exception as e:
+            logger.error(f"Failed to load DDoS model: {e}")
+            self.model = None
             self.enabled = False
 
     def is_ready(self) -> bool:
         return self.enabled and self.model is not None
 
-    def predict(self, stats: List[Dict[str, int]], devices: Dict[str, Dict[str, str]], interval_seconds: int) -> List[DetectionResult]:
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def predict(
+        self,
+        stats: List[Dict],
+        devices: Dict[str, Dict],
+        interval_seconds: int,
+    ) -> List[DetectionResult]:
+        """Run the ML model on per-device stats from the last collection.
+
+        Args:
+            stats: list of dicts with keys mac_address, bytes_uploaded,
+                   bytes_downloaded (produced by StatsCollector).
+            devices: MAC → device-info mapping (currently unused but kept
+                     for future feature expansion).
+            interval_seconds: the collection interval that produced *stats*.
+
+        Returns:
+            A DetectionResult for **every** device (not only attacks).
+        """
         if not self.is_ready() or not stats:
             return []
 
-        rows = []
-        meta: List[Dict[str, int]] = []
+        rows: List[Dict[str, float]] = []
+        meta: List[Dict] = []
+
         for stat in stats:
             mac = stat.get("mac_address")
             if not mac:
                 continue
-            device = devices.get(mac.upper(), {})
-            row = self._build_row(stat, device, interval_seconds)
-            if row:
-                rows.append(row)
-                meta.append({
-                    "mac_address": mac,
-                    "total_bytes": int(stat.get("bytes_uploaded", 0)) + int(stat.get("bytes_downloaded", 0)),
-                })
+
+            bytes_in = int(stat.get("bytes_downloaded", 0))
+            bytes_out = int(stat.get("bytes_uploaded", 0))
+            duration = max(1, int(interval_seconds))
+
+            row = self._build_feature_row(bytes_in, bytes_out, duration)
+            rows.append(row)
+            meta.append({
+                "mac_address": mac,
+                "total_bytes": bytes_in + bytes_out,
+            })
 
         if not rows:
             return []
 
-        df = pd.DataFrame(rows)
-        preds = self.model.predict(df)
-        confidences = None
-        if hasattr(self.model, "predict_proba"):
-            probas = self.model.predict_proba(df)
-            confidences = probas.max(axis=1)
+        df = pd.DataFrame(rows, columns=FEATURE_COLUMNS)
+
+        try:
+            preds = self.model.predict(df)
+            confidences = None
+            if hasattr(self.model, "predict_proba"):
+                probas = self.model.predict_proba(df)
+                confidences = probas.max(axis=1)
+        except Exception as e:
+            logger.error(f"DDoS model prediction failed: {e}")
+            return []
 
         results: List[DetectionResult] = []
         for idx, pred in enumerate(preds):
-            confidence = float(confidences[idx]) if confidences is not None else 0.0
-            results.append(DetectionResult(
-                mac_address=meta[idx]["mac_address"],
-                prediction=str(pred),
-                confidence=confidence,
-                total_bytes=meta[idx]["total_bytes"],
-            ))
+            conf = float(confidences[idx]) if confidences is not None else 0.0
+            results.append(
+                DetectionResult(
+                    mac_address=meta[idx]["mac_address"],
+                    prediction=str(pred),
+                    confidence=conf,
+                    total_bytes=meta[idx]["total_bytes"],
+                )
+            )
 
         return results
 
-    def _build_row(self, stat: Dict[str, int], device: Dict[str, str], interval_seconds: int) -> Dict[str, object]:
-        if self.feature_columns is None:
-            return {}
+    # ------------------------------------------------------------------
+    # Feature engineering
+    # ------------------------------------------------------------------
 
-        defaults = self._default_feature_values(interval_seconds)
-        bytes_up = int(stat.get("bytes_uploaded", 0))
-        bytes_down = int(stat.get("bytes_downloaded", 0))
+    @staticmethod
+    def _build_feature_row(
+        bytes_in: int, bytes_out: int, duration: int
+    ) -> Dict[str, float]:
+        """Convert raw byte counts into the feature vector the model expects."""
+        # Estimate packets (same heuristic used in training data generation)
+        pkts_in = max(1, bytes_in // NORMAL_PKT_SIZE) if bytes_in > 0 else 0
+        pkts_out = max(1, bytes_out // NORMAL_PKT_SIZE) if bytes_out > 0 else 0
 
-        ip_address = (device.get("ip_address") or "0.0.0.0").strip()
-        row = dict(defaults)
+        bytes_per_sec_in = round(bytes_in / duration, 2)
+        bytes_per_sec_out = round(bytes_out / duration, 2)
 
-        # Common byte mappings
-        for key in ["src_bytes", "src_ip_bytes"]:
-            if key in row:
-                row[key] = bytes_up
-        for key in ["dst_bytes", "dst_ip_bytes"]:
-            if key in row:
-                row[key] = bytes_down
+        pkt_size_avg_in = round(bytes_in / max(1, pkts_in), 2)
+        pkt_size_avg_out = round(bytes_out / max(1, pkts_out), 2)
 
-        # Packet estimates (rough)
-        packets_up = max(1, bytes_up // 1500) if bytes_up > 0 else 0
-        packets_down = max(1, bytes_down // 1500) if bytes_down > 0 else 0
-        for key in ["src_pkts"]:
-            if key in row:
-                row[key] = packets_up
-        for key in ["dst_pkts"]:
-            if key in row:
-                row[key] = packets_down
+        byte_ratio = round(bytes_out / (bytes_in + 1), 6)
+        pkt_ratio = round(pkts_out / (pkts_in + 1), 6)
 
-        if "src_ip" in row:
-            row["src_ip"] = ip_address
-        if "dst_ip" in row:
-            row["dst_ip"] = "0.0.0.0"
-
-        return row
-
-    def _default_feature_values(self, interval_seconds: int) -> Dict[str, object]:
-        now_ts = int(datetime.utcnow().timestamp())
-        defaults: Dict[str, object] = {}
-        for col in self.feature_columns or []:
-            if col in {"ts"}:
-                defaults[col] = now_ts
-            elif col in {"proto"}:
-                defaults[col] = "tcp"
-            elif col in {"service"}:
-                defaults[col] = "-"
-            elif col in {"conn_state"}:
-                defaults[col] = "S1"
-            elif col in {"http_method"}:
-                defaults[col] = "GET"
-            elif col in {"http_version"}:
-                defaults[col] = "1.1"
-            elif col in {"weird_notice", "label"}:
-                defaults[col] = "F"
-            elif col in {
-                "dns_query",
-                "ssl_subject",
-                "ssl_issuer",
-                "http_uri",
-                "http_user_agent",
-                "http_orig_mime_types",
-                "http_resp_mime_types",
-                "weird_name",
-                "weird_addl",
-            }:
-                defaults[col] = "-"
-            elif col in {"duration"}:
-                defaults[col] = max(1, int(interval_seconds))
-            else:
-                defaults[col] = 0
-
-        return defaults
+        return {
+            "bytes_in": bytes_in,
+            "bytes_out": bytes_out,
+            "pkts_in": pkts_in,
+            "pkts_out": pkts_out,
+            "duration": duration,
+            "bytes_per_sec_in": bytes_per_sec_in,
+            "bytes_per_sec_out": bytes_per_sec_out,
+            "pkt_size_avg_in": pkt_size_avg_in,
+            "pkt_size_avg_out": pkt_size_avg_out,
+            "byte_ratio": byte_ratio,
+            "pkt_ratio": pkt_ratio,
+        }
