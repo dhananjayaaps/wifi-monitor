@@ -1,5 +1,5 @@
-import { Tabs } from 'expo-router';
-import { TouchableOpacity } from 'react-native';
+import { Redirect, Tabs } from 'expo-router';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 
@@ -13,6 +13,20 @@ function LogoutButton() {
 }
 
 export default function TabsLayout() {
+  const { token, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }}>
+        <ActivityIndicator color="#2563eb" size="large" />
+      </View>
+    );
+  }
+
+  if (!token) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <Tabs
       screenOptions={{
