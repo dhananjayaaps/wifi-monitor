@@ -51,6 +51,6 @@ simulation:
 # DDoS detector settings
 ddos_detector:
   enabled: true
-  model_path: "../ddos_model.joblib"
+  model_path: "ddos_model.joblib"
   min_confidence: 0.7
   alert_cooldown_seconds: 300
