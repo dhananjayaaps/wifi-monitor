@@ -10,6 +10,7 @@ from .client import BackendClient
 from .scanner import NetworkScanner
 from .collector import StatsCollector
 from .ddos_detector import DdosDetector
+from .audio_alert import AudioAlertSystem
 from .logger import setup_logging, get_logger
 
 
@@ -48,6 +49,15 @@ class Agent:
         self.ddos_min_confidence = self.config.ddos_min_confidence
         self.ddos_alert_cooldown = self.config.ddos_alert_cooldown_seconds
         self._last_ddos_alert = {}
+
+        # Audio alert system
+        self.audio_alerts = AudioAlertSystem(
+            enabled=self.config.audio_alerts_enabled,
+            engine=self.config.audio_alerts_engine,
+            volume=self.config.audio_alerts_volume,
+            language=self.config.audio_alerts_language,
+            cooldown_seconds=self.config.audio_alerts_cooldown,
+        )
         
         self.devices = []
         self.last_scan = 0
@@ -77,6 +87,12 @@ class Agent:
             self.logger.warning("DDoS detector enabled but model failed to load")
         else:
             self.logger.info(f"DDoS detector: {'ENABLED' if self.ddos_detector.enabled else 'DISABLED'}")
+        
+        # Audio alert system status
+        if self.audio_alerts.is_ready():
+            self.logger.info(f"Audio alerts: ENABLED (engine: {self.audio_alerts.engine}, volume: {self.audio_alerts.volume}%)")
+        else:
+            self.logger.info("Audio alerts: DISABLED")
         
         if not self.config.api_key and (not self.config.auth_email or not self.config.auth_password):
             self.logger.error("Authentication credentials not configured!")
@@ -272,6 +288,18 @@ class Agent:
         result = self.client.ingest_detection_alerts(alerts)
         if result:
             self.logger.warning(f"✓ DDoS alerts sent: {result['data']['ingested_count']}")
+            # Play audio alerts for each detected attack
+            if self.audio_alerts.is_ready():
+                for alert in alerts:
+                    mac = alert["mac_address"]
+                    device_info = devices_by_mac.get(mac.upper(), {})
+                    device_name = device_info.get("hostname") or device_info.get("ip_address")
+                    self.audio_alerts.alert(
+                        alert_type=alert["alert_type"],
+                        mac_address=mac,
+                        confidence=alert["confidence"],
+                        device_name=device_name,
+                    )
         else:
             self.logger.error("Failed to send DDoS alerts")
     
@@ -295,6 +323,12 @@ class Agent:
         
         self.logger.info("Stopping agent...")
         self.running = False
+        
+        # Cleanup audio alerts
+        try:
+            self.audio_alerts.cleanup()
+        except Exception as e:
+            self.logger.error(f"Error during audio cleanup: {e}")
         
         # Cleanup iptables rules if using real collector
         if not self.config.simulation_mode:

@@ -71,6 +71,61 @@ python scripts/simulate_ddos_alerts.py \
        --repeat 2
 ```
 
+✅ **Audio Alerts (NEW!)**
+- Voice notifications through connected speakers
+- Plays alerts when DDoS/DoS attacks are detected
+- Multiple TTS engines support (espeak, pyttsx3, gTTS)
+- Configurable volume and language
+- Cooldown mechanism to prevent alert spam
+
+### Setup Audio Alerts
+
+1. **Connect speakers** to your Raspberry Pi (3.5mm jack or USB)
+
+2. **Install espeak** (recommended for Raspberry Pi):
+```bash
+sudo apt-get update
+sudo apt-get install espeak alsa-utils
+```
+
+3. **Test audio output**:
+```bash
+# Test speakers
+speaker-test -t wav -c 2
+
+# Adjust volume
+alsamixer
+
+# Test espeak
+espeak "Audio test. This is working."
+```
+
+4. **Enable in config.yaml**:
+```yaml
+audio_alerts:
+  enabled: true          # Enable voice alerts
+  engine: "auto"         # auto | espeak | pyttsx3 | gtts
+  volume: 80             # Volume 0-100
+  language: "en"         # Language code (en, es, fr, de, etc.)
+  cooldown_seconds: 60   # Min seconds between duplicate alerts
+```
+
+5. **Test the audio system**:
+```bash
+python tests/test_audio_alerts.py
+```
+
+6. **Restart the agent** to apply changes:
+```bash
+sudo systemctl restart wifi-monitor
+```
+
+**Supported Languages**: en (English), es (Spanish), fr (French), de (German), it (Italian), pt (Portuguese), ja (Japanese), zh (Chinese), and more.
+
+**Example alert messages**:
+- "Critical security alert. DISTRIBUTED DENIAL OF SERVICE attack detected from TestDevice. Confidence: 98 percent. Immediate action recommended."
+- "Security warning. DENIAL OF SERVICE attack detected from device ending in EE01. Confidence: 75 percent. Immediate action recommended."
+
 ✅ **Production Ready**
 - Comprehensive error handling and retry logic
 - Graceful shutdown and cleanup
@@ -206,14 +261,22 @@ pi-agent/
 │   ├── agent.py          # Main orchestration loop
 │   ├── scanner.py        # Network device discovery
 │   ├── collector.py      # Traffic stats collection
+│   ├── ddos_detector.py  # DDoS/DoS ML detection
+│   ├── audio_alert.py    # Voice alert system
 │   ├── client.py         # Backend API client
 │   ├── config.py         # Configuration loader
 │   ├── logger.py         # Logging system
 │   └── main.py           # Entry point
+├── scripts/
+│   ├── simulate_ddos_alerts.py  # Test DDoS alerts
+│   └── real_ddos_test.py        # Real traffic flood generator
+├── tests/
+│   └── test_audio_alerts.py     # Audio system test utility
 ├── systemd/
 │   └── wifi-monitor.service  # systemd unit file
 ├── install.sh            # Automated installer
 ├── config.yaml           # Configuration file
+├── ddos_model.joblib     # Trained ML model
 ├── requirements.txt      # Python dependencies
 ├── run.py                # Run script
 ├── SETUP_GUIDE.md        # Comprehensive setup guide
@@ -245,6 +308,21 @@ pi-agent/
 - **Graceful Shutdown**: Signal handling for clean exit
 - **Error Recovery**: Automatic reconnection on failures
 
+### DDoS Detector (`ddos_detector.py`)
+- **ML Classification**: Random Forest model for traffic pattern analysis
+- **Feature Engineering**: Converts raw byte/packet counts to model features
+- **Real-time Detection**: Predicts normal/dos/ddos on each stats collection
+- **Confidence Scoring**: Returns probability scores for each class
+- **Alert Generation**: Sends alerts to backend when attacks are detected
+
+### Audio Alert System (`audio_alert.py`)
+- **Multi-Engine Support**: espeak (native), pyttsx3 (offline), gTTS (cloud)
+- **Auto-detection**: Automatically finds available TTS engine
+- **Volume Control**: System-level volume adjustment via amixer
+- **Alert Cooldown**: Prevents spam with configurable cooldown period
+- **Message Templates**: Dynamic messages based on attack type and confidence
+- **Background Playback**: Non-blocking audio to avoid interrupting agent
+
 ### Client (`client.py`)
 - **REST API**: Communication with backend server
 - **Authentication**: JWT token and API key handling
@@ -266,6 +344,12 @@ See `config.yaml` for all options. Key settings:
 | `log_level` | Logging verbosity | INFO |
 | `retry_attempts` | Number of retry attempts | 3 |
 | `retry_delay` | Delay between retries (seconds) | 5 |
+| `ddos_detector.enabled` | Enable DDoS detection | false |
+| `ddos_detector.min_confidence` | Min confidence threshold | 0.7 |
+| `audio_alerts.enabled` | Enable voice alerts | false |
+| `audio_alerts.engine` | TTS engine (auto/espeak/pyttsx3/gtts) | auto |
+| `audio_alerts.volume` | Speaker volume (0-100) | 80 |
+| `audio_alerts.language` | Voice language code | en |
 
 ## Requirements
 

@@ -6,6 +6,14 @@ numpy==1.26.4
 pandas==2.2.2
 scikit-learn==1.4.2
 
+# Audio alert dependencies (optional - only needed if audio_alerts.enabled: true)
+# Install espeak on Raspberry Pi: sudo apt-get install espeak
+# For offline TTS: pip install pyttsx3
+# For cloud TTS: pip install gtts pygame
+pyttsx3==2.90  # Offline TTS (optional alternative to espeak)
+# gTTS==2.5.1  # Google TTS (requires internet, uncomment if using)
+# pygame==2.5.2  # MP3 playback for gTTS (uncomment if using)
+
 # For real network scanning (production use)
 # Uncomment if you want to use scapy instead of arp-scan/nmap
 # Note: scapy requires additional system dependencies
