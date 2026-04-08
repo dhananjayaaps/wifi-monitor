@@ -54,3 +54,12 @@ ddos_detector:
   model_path: "ddos_model.joblib"
   min_confidence: 0.7
   alert_cooldown_seconds: 300
+
+# Audio alert settings (voice notifications through connected speakers)
+# Requires espeak installed on Raspberry Pi: sudo apt-get install espeak
+audio_alerts:
+  enabled: false  # Set to true to enable voice alerts
+  engine: "auto"  # auto | espeak | pyttsx3 | gtts
+  volume: 80      # Volume level 0-100
+  language: "en"  # Language code (en, es, fr, de, etc.)
+  cooldown_seconds: 60  # Minimum seconds between alerts of the same type
