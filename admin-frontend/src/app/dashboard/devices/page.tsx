@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { devicesAPI } from '@/lib/api';
 import {
@@ -107,7 +107,7 @@ function DeviceIcon({
 
 /* ---------------- Main Component ---------------- */
 
-export default function DevicesPage() {
+function DevicesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [devices, setDevices] = useState<Device[]>([]);
@@ -539,6 +539,14 @@ export default function DevicesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DevicesPage() {
+  return (
+    <Suspense fallback={<div className="px-8 py-8 text-slate-600">Loading devices...</div>}>
+      <DevicesPageContent />
+    </Suspense>
   );
 }
 

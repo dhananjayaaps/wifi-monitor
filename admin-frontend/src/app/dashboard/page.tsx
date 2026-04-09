@@ -64,7 +64,7 @@ export default function DashboardPage() {
       try {
         const [devicesRes, alertsRes, agentsRes] = await Promise.all([
           devicesAPI.list(),
-          alertsAPI.history(24),
+          alertsAPI.history({ hours: 24 }),
           agentsAPI.list(),
         ]);
 
