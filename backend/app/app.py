@@ -1,5 +1,6 @@
 """Application factory for the backend service."""
 from flask import Flask, jsonify
+import os
 from flask_jwt_extended import JWTManager
 from pydantic import ValidationError
 # Use hardcoded settings for local runs (no external config required)
@@ -26,6 +27,9 @@ def create_app() -> Flask:
 		SQLALCHEMY_DATABASE_URI=settings.database_url,
 		SQLALCHEMY_TRACK_MODIFICATIONS=False,
 		DEFAULT_DEVICE_CAP=None,
+		VOICE_SERVICE_URL=os.getenv("VOICE_SERVICE_URL", ""),
+		VOICE_SERVICE_TOKEN=os.getenv("VOICE_SERVICE_TOKEN", ""),
+		VOICE_SERVICE_ALERT_TYPES=os.getenv("VOICE_SERVICE_ALERT_TYPES", "ddos_detected,dos_detected"),
 	)
 
 	# Configure CORS FIRST to handle preflight requests properly

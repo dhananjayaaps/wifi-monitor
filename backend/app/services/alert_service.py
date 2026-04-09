@@ -1,6 +1,10 @@
 """Alert management services."""
 from typing import List, Optional
 from datetime import datetime, timedelta
+import json
+import urllib.request
+import urllib.error
+from flask import current_app
 from ..extensions import db
 from ..models import Alert, AlertHistory, Device, aggregate_device_usage
 
@@ -38,7 +42,59 @@ def record_alert_trigger(alert: Alert, device_id: int, value: int) -> AlertHisto
     history = AlertHistory(alert_id=alert.id, device_id=device_id, value_at_trigger=value)
     db.session.add(history)
     db.session.commit()
+    _send_voice_notification(alert, device_id, value)
     return history
+
+
+def _send_voice_notification(alert: Alert, device_id: int, value: int) -> None:
+    """Send voice notification to optional external voice service."""
+    if not current_app:
+        return
+
+    service_url = (current_app.config.get("VOICE_SERVICE_URL") or "").strip()
+    if not service_url:
+        return
+
+    types_raw = current_app.config.get("VOICE_SERVICE_ALERT_TYPES", "")
+    allowed_types = {t.strip().lower() for t in types_raw.split(",") if t.strip()}
+    if allowed_types and alert.alert_type.lower() not in allowed_types:
+        return
+
+    device = Device.query.get(device_id)
+    device_name = device.hostname or device.mac_address if device else "Unknown device"
+
+    if alert.alert_type == "ddos_detected":
+        message = f"DDoS detected on {device_name}."
+    elif alert.alert_type == "dos_detected":
+        message = f"DoS detected on {device_name}."
+    elif alert.alert_type == "data_cap":
+        message = f"Data cap exceeded on {device_name}."
+    else:
+        message = f"Alert triggered for {device_name}."
+
+    payload = {
+        "message": message,
+        "alert_type": alert.alert_type,
+        "device": device_name,
+        "value": value,
+    }
+
+    token = (current_app.config.get("VOICE_SERVICE_TOKEN") or "").strip()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Voice-Token"] = token
+
+    try:
+        req = urllib.request.Request(
+            f"{service_url.rstrip('/')}/speak",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=3)
+    except urllib.error.URLError:
+        # Best-effort only
+        return
 
 
 def evaluate_usage_alerts(user_id: int, device_id: int, total_bytes: int) -> List[AlertHistory]:

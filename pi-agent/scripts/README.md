@@ -57,11 +57,13 @@ python simulate_ddos_alerts.py --mode backend \
   --repeat 3 \
   --interval 5
 
-# Use custom MAC addresses
+# Use custom MAC addresses (repeat --mac)
 python simulate_ddos_alerts.py --mode backend \
   --email admin@example.com \
   --password your_password \
-  --macs AA:BB:CC:DD:EE:01 AA:BB:CC:DD:EE:02 AA:BB:CC:DD:EE:03 \
+  --mac AA:BB:CC:DD:EE:01 \
+  --mac AA:BB:CC:DD:EE:02 \
+  --mac AA:BB:CC:DD:EE:03 \
   --count 5
 ```
 
@@ -69,12 +71,12 @@ python simulate_ddos_alerts.py --mode backend \
 - `--base-url`: Backend URL (default: `http://localhost:5000/api/v1`)
 - `--api-key`: Agent API key (preferred over email/password)
 - `--email` / `--password`: Login credentials (obtains API key automatically)
-- `--agent-name`: Agent name for registration (default: `pi-agent-test`)
-- `--count`: Number of alerts per batch (default: 3)
+- `--agent-name`: Agent name for registration (default: `pi-agent`)
+- `--count`: Number of alerts per batch (default: 10)
 - `--attack-type`: Force attack type (`dos` or `ddos`), otherwise random
-- `--macs`: List of MAC addresses to use (default: 2 simulated MACs)
+- `--mac`: Target MAC address (repeat for multiple). If omitted, defaults to 2 simulated MACs
 - `--repeat`: Number of batches to send (default: 1)
-- `--interval`: Seconds between batches (default: 10)
+- `--interval`: Seconds between batches (default: 5)
 - `--ensure-devices`: Sync devices before sending alerts
 
 ---
@@ -344,22 +346,19 @@ DDOS attacks detector/
 
 ## Quick Reference
 
-```bash
-# Train model
-cd ../../DDOS\ attacks\ detector
-python generate_synthetic_dataset.py
-python train_ddos_model.py
+## Correct
 
-# Test model locally
-cd ../pi-agent/scripts
-python simulate_ddos_alerts.py --mode local --model ../../DDOS\ attacks\ detector/ddos_model.joblib --count 30
+# Without Backnd
+python simulate_ddos_alerts.py --mode local --model /home/admin/wifi-monitor/pi-agent/ddos_model.joblib --count 10
 
-# Send mock alerts to backend
-python simulate_ddos_alerts.py --mode backend --email admin@example.com --password pass --count 5
+# For alertd
+python simulate_ddos_alerts.py --mode backend
 
-# Generate real flood + detect
-python real_ddos_test.py --target 127.0.0.1 --attack udp_flood --duration 15 --confirm --detect --model ../../DDOS\ attacks\ detector/ddos_model.joblib
+# UDP flood to localhost for 15s
+python real_ddos_test.py --target 127.0.0.1 --attack udp_flood --duration 15 --confirm
 
-# Full mixed attack
-python real_ddos_test.py --target 192.168.1.100 --attack mixed --duration 30 --threads 8 --confirm --detect
-```
+# Mixed attack (more realistic)
+python real_ddos_test.py --target 192.168.1.100 --attack mixed --duration 30 --threads 8 --confirm
+
+# With ML detection
+python real_ddos_test.py --target 127.0.0.1 --attack udp_flood --duration 15 --confirm --detect --model ../ddos_model.joblib
